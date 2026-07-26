@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "694729307284",
+    "project_id": "super-sol-app-2026",
+    "storage_bucket": "super-sol-app-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:694729307284:android:c2aa83250badd219e6b081",
+        "android_client_info": {
+          "package_name": "com.supersol.super_sol"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "694729307284-bf43g1bdtnqptgn6v6vfl9jtt0guhe4c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsyGA5RmUVhnb_Fjmp50EDsYnAzCcBWk8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "694729307284-bf43g1bdtnqptgn6v6vfl9jtt0guhe4c.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "694729307284-turg48ebri5vhq9q0hi4c6r1nl57f6la.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.supersol.superSol"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
