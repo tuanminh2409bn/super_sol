@@ -6,6 +6,7 @@ import 'package:super_sol/ui/account_details_screen.dart';
 import 'package:super_sol/ui/auth_sheet.dart';
 import 'package:super_sol/ui/home_screen.dart';
 import 'package:super_sol/ui/pin_screen.dart';
+import 'package:super_sol/ui/transfer_recipient_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +35,18 @@ void main() {
     expect(find.text('ĐĂNG NHẬP'), findsOneWidget);
   });
 
+  testWidgets('PIN back opens the login-method picker when there is no route', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(_TestHost(home: PinScreen(auth: AuthService())));
+
+    await tester.tap(find.byKey(const Key('pin-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Đăng nhập'), findsWidgets);
+  });
+
   testWidgets('home scrolls continuously through states 3.2 and 3.3', (
     tester,
   ) async {
@@ -44,6 +57,28 @@ void main() {
 
     expect(find.text('TRINHTRUNGMINH님'), findsOneWidget);
     expect(find.text('test@gmail.com'), findsNothing);
+    final accountNameFinder = find.byKey(const Key('home-account-name'));
+    final accountNameWidget = tester.widget<Text>(accountNameFinder);
+    final accountNameContext = tester.element(accountNameFinder);
+    final accountNamePainter = TextPainter(
+      text: TextSpan(
+        text: accountNameWidget.data,
+        style: DefaultTextStyle.of(
+          accountNameContext,
+        ).style.merge(accountNameWidget.style),
+      ),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(accountNameContext),
+    )..layout();
+    expect(accountNameWidget.style?.fontSize, 20.5);
+    expect(
+      accountNamePainter.width,
+      lessThanOrEqualTo(tester.getSize(accountNameFinder).width),
+    );
+    final benefitTitle = tester.getRect(find.text('땡겨요'));
+    final benefitSubtitle = tester.getRect(find.text('할인 쿠폰 드려요'));
+    expect(benefitSubtitle.top, greaterThan(benefitTitle.bottom));
 
     // The icon button is the deterministic switch path used by the UI.
     await tester.tap(find.byKey(const Key('home-switch')));
@@ -179,6 +214,100 @@ void main() {
     await tester.tap(find.byKey(const Key('account-back')));
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
+  });
+
+  testWidgets('the account-history transfer button opens the transfer flow', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(
+      _TestHost(home: AccountDetailsScreen(auth: _SignedInAuthService())),
+    );
+
+    await tester.tap(find.byKey(const Key('account-transfer')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TransferRecipientScreen), findsOneWidget);
+  });
+
+  testWidgets('transfer recipient entry selects a bank and enables next', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(
+      _TestHost(home: HomeScreen(auth: _SignedInAuthService())),
+    );
+
+    await tester.tap(find.byKey(const Key('home-transfer')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TransferRecipientScreen), findsOneWidget);
+    await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+    await tester.pump();
+    for (final digit in '100237698805'.split('')) {
+      await tester.tap(find.byKey(Key('account-key-$digit')));
+    }
+    await tester.tap(find.byKey(const Key('transfer-bank-selector')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('bank-selector-list')), findsOneWidget);
+    await tester.drag(
+      find.byKey(const Key('bank-selector-list')),
+      const Offset(0, -500),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('bank-토스뱅크')));
+    await tester.pumpAndSettle();
+    expect(find.text('토스뱅크'), findsWidgets);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('transfer-next')))
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await tester.pumpAndSettle();
+    expect(find.text('얼마를 보낼까요?'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('transfer-next')))
+          .onPressed,
+      isNull,
+    );
+    final lastKeyRow = tester.getRect(find.byKey(const Key('amount-key-00')));
+    final keypadViewport = tester.getRect(find.byType(GridView));
+    final nextButton = tester.getRect(find.byKey(const Key('transfer-next')));
+    expect(lastKeyRow.bottom, lessThanOrEqualTo(keypadViewport.bottom));
+    expect(nextButton.top, greaterThan(lastKeyRow.bottom));
+    await tester.tap(find.byKey(const Key('amount-key-1')));
+    await tester.pump();
+    expect(find.text('1원'), findsNWidgets(2));
+    await tester.tap(find.byKey(const Key('amount-key-00')));
+    await tester.pump();
+    expect(find.text('100원'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('transfer-next')))
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await tester.pumpAndSettle();
+    expect(find.text('EEF90723'), findsOneWidget);
+    expect(find.text('해당 계좌는 사고신고계좌로 거래가 불가합니다.'), findsOneWidget);
+    expect(find.text('아래 계좌로\n100원 보낼까요?'), findsOneWidget);
+    expect(find.text('수수료 무료'), findsOneWidget);
+    expect(find.text('보내기'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('transfer-next')))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byKey(const Key('transfer-error-confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('EEF90723'), findsNothing);
+    expect(find.text('누구에게 보낼까요?'), findsOneWidget);
   });
 }
 

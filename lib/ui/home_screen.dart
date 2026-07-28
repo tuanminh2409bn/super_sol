@@ -5,10 +5,11 @@ import 'account_details_screen.dart';
 import 'auth_sheet.dart';
 import 'design_canvas.dart';
 import 'pin_screen.dart';
+import 'transfer_recipient_screen.dart';
 
 const _homeBackground = Color(0xFFF0F3FA);
 const _ink = Color(0xFF151820);
-const _muted = Color(0xFF747B89);
+const _muted = Color(0xFF555D69);
 const _blue = Color(0xFF075FF7);
 
 class HomeScreen extends StatefulWidget {
@@ -137,6 +138,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _openTransferRecipient() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const TransferRecipientScreen()),
+    );
+    if (mounted) {
+      showDeviceStatusBar(darkIcons: true, backgroundColor: _homeBackground);
+    }
+  }
+
   Future<void> _logout() async {
     await widget.auth.signOut();
     if (!mounted) return;
@@ -176,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _AssetHomeContent(
                       accountName: accountLabel,
                       onOpenDetails: _openAccountDetails,
+                      onTransfer: _openTransferRecipient,
                     ),
                     const Positioned(
                       left: 0,
@@ -250,10 +261,12 @@ class _AssetHomeContent extends StatelessWidget {
   const _AssetHomeContent({
     required this.accountName,
     required this.onOpenDetails,
+    required this.onTransfer,
   });
 
   final String accountName;
   final VoidCallback onOpenDetails;
+  final VoidCallback onTransfer;
 
   @override
   Widget build(BuildContext context) {
@@ -310,7 +323,8 @@ class _AssetHomeContent extends StatelessWidget {
                       '[금융거래한도계좌2]저축예금',
                       style: TextStyle(
                         fontSize: 18,
-                        color: Color(0xFF626773),
+                        color: Color(0xFF505762),
+                        fontWeight: FontWeight.w500,
                         letterSpacing: -1,
                       ),
                     ),
@@ -323,8 +337,8 @@ class _AssetHomeContent extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 27,
                         height: 1,
-                        color: Color(0xFF313640),
-                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF222731),
+                        fontWeight: FontWeight.w600,
                         letterSpacing: -1,
                       ),
                     ),
@@ -334,18 +348,23 @@ class _AssetHomeContent extends StatelessWidget {
                     top: 93,
                     width: 66,
                     height: 45,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0F3FF),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '이체',
-                          style: TextStyle(
-                            color: _blue,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                    child: GestureDetector(
+                      key: const Key('home-transfer'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onTransfer,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F3FF),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '이체',
+                            style: TextStyle(
+                              color: _blue,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
@@ -365,9 +384,9 @@ class _AssetHomeContent extends StatelessWidget {
                         child: Text(
                           '$accountName님의 금융생활, 슈퍼SOL이 함께합니다.',
                           style: const TextStyle(
-                            color: Color(0xFF555A65),
+                            color: Color(0xFF383E48),
                             fontSize: 17,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                             letterSpacing: -.7,
                           ),
                         ),
@@ -404,7 +423,8 @@ class _AssetHomeContent extends StatelessWidget {
                     '7월 이용 금액 0원',
                     style: TextStyle(
                       fontSize: 18,
-                      color: Color(0xFF868C98),
+                      color: Color(0xFF59616D),
+                      fontWeight: FontWeight.w500,
                       letterSpacing: -.7,
                     ),
                   ),
@@ -477,15 +497,19 @@ class _AssetHomeContent extends StatelessWidget {
                 ),
                 const Positioned(
                   left: 85,
-                  top: 53,
+                  top: 62,
                   child: Text(
-                    '할인쿠폰 드려요',
-                    style: TextStyle(fontSize: 17, color: _muted),
+                    '할인 쿠폰 드려요',
+                    style: TextStyle(
+                      fontSize: 17,
+                      color: _muted,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
                 const Positioned(
                   left: 85,
-                  top: 82,
+                  top: 92,
                   child: Text(
                     'bhc치킨 최대 9,000원',
                     style: TextStyle(
@@ -596,7 +620,11 @@ class _AssetHomeContent extends StatelessWidget {
                   top: 82,
                   child: Text(
                     '오늘 쓴 돈',
-                    style: TextStyle(fontSize: 17, color: _muted),
+                    style: TextStyle(
+                      fontSize: 17,
+                      color: _muted,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
                 const Positioned(
@@ -909,21 +937,22 @@ class _Header extends StatelessWidget {
           ),
           Positioned(
             left: 38,
-            top: -4,
-            width: 280,
-            height: 40,
+            top: 0,
+            width: 285,
+            height: 36,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onAccountTap,
               child: Text(
+                key: const Key('home-account-name'),
                 accountName == 'ĐĂNG NHẬP' ? accountName : '$accountName님',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 26,
+                  fontSize: 20.5,
                   color: Color(0xFF11141B),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -.2,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -1.5,
                 ),
               ),
             ),
@@ -1056,7 +1085,10 @@ class _ServiceRow extends StatelessWidget {
                         ),
                         TextSpan(
                           text: ' · 가족과 함께하는 금융생활',
-                          style: TextStyle(color: _muted),
+                          style: TextStyle(
+                            color: _muted,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
@@ -1067,6 +1099,7 @@ class _ServiceRow extends StatelessWidget {
                     style: const TextStyle(
                       color: _muted,
                       fontSize: 17,
+                      fontWeight: FontWeight.w500,
                       letterSpacing: -.6,
                     ),
                   ),
@@ -1137,6 +1170,7 @@ class _GroupRow extends StatelessWidget {
               style: const TextStyle(
                 color: _muted,
                 fontSize: 16,
+                fontWeight: FontWeight.w500,
                 letterSpacing: -.6,
               ),
             ),
@@ -1169,19 +1203,120 @@ class _BottomNavigation extends StatelessWidget {
       bottom: 35 + bottomLift,
       width: 535,
       height: 98,
-      child: const Image(
-        image: AssetImage('assets/images/bottom_nav_clean.png'),
-        fit: BoxFit.fill,
-        filterQuality: FilterQuality.none,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(49),
+          border: Border.all(color: const Color(0xFFE9EDF4)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1F4B5568),
+              blurRadius: 14,
+              offset: Offset(0, 7),
+            ),
+          ],
+        ),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _BottomNavigationItem(
+                label: '홈',
+                selected: true,
+                icon: Icon(Icons.home_rounded),
+              ),
+              _BottomNavigationItem(label: '금융', icon: _WonIcon()),
+              _BottomNavigationItem(
+                label: '상품',
+                icon: Icon(Icons.shopping_bag_rounded),
+              ),
+              _BottomNavigationItem(
+                label: '혜택',
+                icon: Icon(Icons.card_giftcard_rounded),
+              ),
+              _BottomNavigationItem(
+                label: '주식',
+                icon: Icon(Icons.insert_chart_rounded),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomNavigationItem extends StatelessWidget {
+  const _BottomNavigationItem({
+    required this.label,
+    required this.icon,
+    this.selected = false,
+  });
+
+  final String label;
+  final Widget icon;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? const Color(0xFF0874EF) : const Color(0xFF646C7A);
+    return SizedBox(
+      width: 78,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconTheme(
+            data: IconThemeData(color: color, size: 31),
+            child: icon,
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              height: 1,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              letterSpacing: -.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WonIcon extends StatelessWidget {
+  const _WonIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 29,
+      height: 29,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: Color(0xFF8B94A4),
+        shape: BoxShape.circle,
+      ),
+      child: const Text(
+        '₩',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          height: 1,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
 }
 
 const _menuText = TextStyle(
-  color: Color(0xFF303540),
+  color: Color(0xFF20242D),
   fontSize: 17,
-  fontWeight: FontWeight.w500,
+  fontWeight: FontWeight.w600,
 );
 
 const _footerText = TextStyle(

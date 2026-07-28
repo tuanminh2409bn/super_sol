@@ -6,6 +6,7 @@ import 'package:super_sol/ui/account_details_screen.dart';
 import 'package:super_sol/ui/home_screen.dart';
 import 'package:super_sol/ui/pin_screen.dart';
 import 'package:super_sol/ui/splash_screen.dart';
+import 'package:super_sol/ui/transfer_recipient_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -126,6 +127,28 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/4_2_account_scrolled.png'),
+    );
+
+    await tester.pumpWidget(_host(const TransferRecipientScreen()));
+    await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('account-key-1')));
+    await tester.tap(find.byKey(const Key('transfer-bank-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bank-신한')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('amount-key-1')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await _precache(tester, const [
+      'assets/images/bank_shinhan_transparent.png',
+    ]);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/11_transfer_error.png'),
     );
   });
 }

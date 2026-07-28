@@ -75,25 +75,3 @@ class DesignCanvas extends StatelessWidget {
     );
   }
 }
-
-class HomeIndicator extends StatelessWidget {
-  const HomeIndicator({super.key, this.color = const Color(0xFFE6E6E6)});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: 189,
-      bottom: 12,
-      child: Container(
-        width: 211,
-        height: 7,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
-  }
-}

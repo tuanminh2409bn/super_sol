@@ -41,6 +41,19 @@ class _PinScreenState extends State<PinScreen> {
     setState(_digits.clear);
   }
 
+  Future<void> _goBack() async {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+
+    // PIN is normally reached through a replacement route from splash, so
+    // there may be no previous route to reveal. In that case return to the
+    // available login-method picker instead of attempting an invalid pop.
+    await _chooseLoginMethod();
+  }
+
   void _openHome() {
     if (!mounted || _navigating) return;
     _navigating = true;
@@ -69,6 +82,22 @@ class _PinScreenState extends State<PinScreen> {
       child: Stack(
         children: [
           const Positioned.fill(child: ColoredBox(color: Colors.white)),
+          Positioned(
+            left: 25,
+            top: 104,
+            width: 48,
+            height: 48,
+            child: IconButton(
+              key: const Key('pin-back'),
+              onPressed: _goBack,
+              padding: EdgeInsets.zero,
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 25,
+                color: Color(0xFF303641),
+              ),
+            ),
+          ),
           const Positioned(
             left: 100,
             right: 100,

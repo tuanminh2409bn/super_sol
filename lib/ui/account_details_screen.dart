@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/auth_service.dart';
 import 'design_canvas.dart';
+import 'transfer_recipient_screen.dart';
 
 const _detailsInk = Color(0xFF141820);
 const _detailsMuted = Color(0xFF717887);
@@ -71,6 +72,15 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
     );
   }
 
+  Future<void> _openTransferRecipient() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const TransferRecipientScreen()),
+    );
+    if (mounted) {
+      showDeviceStatusBar(darkIcons: true, backgroundColor: Colors.white);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final accountLabel = widget.auth.isSignedIn
@@ -93,7 +103,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
                 height: 1780,
                 child: Stack(
                   children: [
-                    const _AccountSummary(),
+                    _AccountSummary(onTransfer: _openTransferRecipient),
                     _TransactionList(accountName: accountLabel),
                   ],
                 ),
@@ -227,7 +237,9 @@ class _DetailsHeader extends StatelessWidget {
 }
 
 class _AccountSummary extends StatelessWidget {
-  const _AccountSummary();
+  const _AccountSummary({required this.onTransfer});
+
+  final VoidCallback onTransfer;
 
   @override
   Widget build(BuildContext context) {
@@ -329,18 +341,23 @@ class _AccountSummary extends StatelessWidget {
           top: 432,
           width: 533,
           height: 68,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0F4FF),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Center(
-              child: Text(
-                '이체',
-                style: TextStyle(
-                  color: _detailsBlue,
-                  fontSize: 23,
-                  fontWeight: FontWeight.w700,
+          child: GestureDetector(
+            key: const Key('account-transfer'),
+            behavior: HitTestBehavior.opaque,
+            onTap: onTransfer,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F4FF),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Center(
+                child: Text(
+                  '이체',
+                  style: TextStyle(
+                    color: _detailsBlue,
+                    fontSize: 23,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
