@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_data.dart';
+import '../core/bank_catalog.dart';
+import 'bank_logo.dart';
+import 'data_management_screen.dart';
 import 'design_canvas.dart';
 
 const _ink = Color(0xFF111827);
@@ -7,51 +11,13 @@ const _muted = Color(0xFF818A99);
 const _line = Color(0xFFD9DDE5);
 const _blue = Color(0xFF0969F6);
 
-const _bankLogoAssets = <String, String>{
-  '신한': 'assets/images/bank_shinhan_mock.png',
-  '제주': 'assets/images/bank_jeju_mock.png',
-  '국민': 'assets/images/bank_kb_mock.png',
-  '기업': 'assets/images/bank_ibk_mock.png',
-  '농협': 'assets/images/bank_nh_mock.png',
-  '산업': 'assets/images/bank_kdb_mock.png',
-  '수협': 'assets/images/bank_suhyup_mock.png',
-  '신협': 'assets/images/bank_shinhyup_mock.png',
-  '우리': 'assets/images/bank_woori_mock.png',
-  '하나': 'assets/images/bank_hana_mock.png',
-  '한국씨티': 'assets/images/bank_citi_mock.png',
-  '카카오뱅크': 'assets/images/bank_kakao_mock.png',
-  '케이뱅크': 'assets/images/bank_kbank_mock.png',
-  '토스뱅크': 'assets/images/bank_toss_mock.png',
-  '경남': 'assets/images/bank_kyongnam_mock.png',
-  '광주': 'assets/images/bank_gwangju_mock.png',
-  '아이엠뱅크(대구)': 'assets/images/bank_im_mock.png',
-  '부산': 'assets/images/bank_busan_mock.png',
-  '전북': 'assets/images/bank_jeonbuk_mock.png',
-  '회원수협': 'assets/images/bank_membersuhyup_mock.png',
-  '새마을': 'assets/images/bank_saemaul_mock.png',
-  '우체국': 'assets/images/bank_post_mock.png',
-  '저축은행': 'assets/images/bank_savings_mock.png',
-  '지역농·축협': 'assets/images/bank_localnh_mock.png',
-  '도이치': 'assets/images/bank_deutsche_mock.png',
-  '중국': 'assets/images/bank_china_mock.png',
-  '중국건설': 'assets/images/bank_ccb_mock.png',
-  '중국공상': 'assets/images/bank_icbc_mock.png',
-  'BNP파리바': 'assets/images/bank_bnp_mock.png',
-  'BOA': 'assets/images/bank_boa_mock.png',
-  'HSBC': 'assets/images/bank_hsbc_mock.png',
-  'JP모간': 'assets/images/bank_jpmorgan_mock.png',
-  'SC': 'assets/images/bank_sc_mock.png',
-  '산림조합': 'assets/images/bank_forestry_mock.png',
-  '국세': 'assets/images/bank_nationaltax_mock.png',
-  '지방세': 'assets/images/bank_localtax_mock.png',
-  '국고': 'assets/images/bank_treasury_mock.png',
-  '관세': 'assets/images/bank_customs_mock.png',
-};
-
 enum _TransferStage { recipient, amount, confirmation }
 
 class TransferRecipientScreen extends StatefulWidget {
-  const TransferRecipientScreen({super.key});
+  TransferRecipientScreen({super.key, AppDataStore? dataStore})
+    : dataStore = dataStore ?? AppDataStore.shared;
+
+  final AppDataStore dataStore;
 
   @override
   State<TransferRecipientScreen> createState() =>
@@ -61,17 +27,55 @@ class TransferRecipientScreen extends StatefulWidget {
 class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   _TransferStage _stage = _TransferStage.recipient;
   bool _manualEntry = false;
+  bool _myAccountsExpanded = false;
+  bool _sourceAccountSelectorVisible = false;
   String _account = '';
   String? _bank;
+  String? _recipientName;
+  String? _destinationAccountId;
   int _amount = 0;
+  String? _sourceAccountId;
 
   @override
   void initState() {
     super.initState();
     showDeviceStatusBar(darkIcons: true, backgroundColor: Colors.white);
+    widget.dataStore.addListener(_handleDataChange);
   }
 
-  bool get _canContinue => _account.isNotEmpty && _bank != null;
+  @override
+  void dispose() {
+    widget.dataStore.removeListener(_handleDataChange);
+    super.dispose();
+  }
+
+  void _handleDataChange() {
+    if (mounted) setState(() {});
+  }
+
+  List<_SourceAccount> get _availableSourceAccounts => [
+    for (final account in widget.dataStore.accounts)
+      _SourceAccount(
+        id: account.id,
+        productName: account.accountType,
+        bankCode: account.bankCode,
+        bank: account.bankDisplayName,
+        accountNumber: account.accountNumber,
+        availableBalance: widget.dataStore.balanceFor(account.id),
+      ),
+  ];
+
+  _SourceAccount? get _selectedSourceAccount {
+    final accounts = _availableSourceAccounts;
+    if (accounts.isEmpty) return null;
+    for (final account in accounts) {
+      if (account.id == _sourceAccountId) return account;
+    }
+    return accounts.first;
+  }
+
+  bool get _canContinue =>
+      _account.isNotEmpty && _bank != null && _selectedSourceAccount != null;
 
   void _back() {
     if (_stage != _TransferStage.recipient) {
@@ -110,15 +114,151 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   }
 
   void _chooseRecipient(_Recipient recipient) {
+    if (_selectedSourceAccount == null) {
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('출금 계좌가 없습니다'),
+          content: const Text('출금 계좌를 먼저 추가해주세요.'),
+          actions: [
+            FilledButton(
+              key: const Key('missing-source-confirm'),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('확인'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     setState(() {
       _bank = recipient.bank;
       _account = recipient.account;
+      _recipientName = recipient.name;
+      _destinationAccountId = recipient.internalAccountId;
       _stage = _TransferStage.amount;
     });
   }
 
+  List<_Recipient> get _savedRecipients => [
+    for (final recipient in widget.dataStore.recipients)
+      _Recipient(
+        recipient.displayName,
+        recipient.bankCode,
+        recipient.accountNumber,
+        BankCatalog.logoAsset(recipient.bankCode),
+        bankCode: recipient.bankCode,
+        recipientId: recipient.id,
+        favorite: recipient.favorite,
+      ),
+  ];
+
+  List<_Recipient> get _ownAccounts => [
+    for (final account in widget.dataStore.accounts)
+      _Recipient(
+        account.accountType,
+        account.bankDisplayName,
+        account.accountNumber,
+        BankCatalog.logoAsset(account.bankCode),
+        bankCode: account.bankCode,
+        internalAccountId: account.id,
+      ),
+  ];
+
+  Future<void> _openRecipientManagement() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            DataManagementScreen(store: widget.dataStore, initialTab: 2),
+      ),
+    );
+  }
+
+  void _startManualEntry() {
+    setState(() {
+      _manualEntry = true;
+      _account = '';
+      _bank = null;
+      _recipientName = null;
+      _destinationAccountId = null;
+    });
+  }
+
+  Future<void> _searchRecipients() async {
+    final selected = await showSearch<_Recipient?>(
+      context: context,
+      delegate: _RecipientSearchDelegate([
+        ..._ownAccounts,
+        ..._savedRecipients,
+      ]),
+    );
+    if (selected != null && mounted) _chooseRecipient(selected);
+  }
+
+  Future<void> _toggleFavorite(_Recipient recipient) async {
+    final recipientId = recipient.recipientId;
+    if (recipientId == null) return;
+    for (final saved in widget.dataStore.recipients) {
+      if (saved.id == recipientId) {
+        await widget.dataStore.saveRecipient(
+          saved.copyWith(favorite: !saved.favorite),
+        );
+        return;
+      }
+    }
+  }
+
+  Future<void> _completeTransfer() async {
+    final source = _selectedSourceAccount;
+    if (source == null || _amount <= 0) return;
+    try {
+      await widget.dataStore.recordTransfer(
+        sourceAccountId: source.id,
+        destinationAccountId: _destinationAccountId,
+        recipientTitle: _recipientName ?? '${_bank ?? ''} $_account'.trim(),
+        amount: _amount,
+        occurredAt: DateTime.now(),
+      );
+    } on StateError catch (error) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('이체할 수 없습니다'),
+          content: Text(error.message),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('확인'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('이체 완료'),
+        content: Text('${_AmountPage._formatted(_amount)}원이 반영되었습니다.'),
+        actions: [
+          FilledButton(
+            key: const Key('transfer-success-confirm'),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final sourceAccount = _selectedSourceAccount;
+    final blockedRecipient = _account == '100237698805';
     final actionButtonBottom = _stage == _TransferStage.amount ? 20.0 : 54.0;
     return PopScope(
       onPopInvokedWithResult: (_, __) => showDeviceStatusBar(
@@ -130,17 +270,25 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
           color: Colors.white,
           child: Stack(
             children: [
-              if (_stage != _TransferStage.recipient || !_manualEntry)
-                _TopControls(onBack: _back),
+              _TopControls(
+                onBack: _back,
+                onManageRecipients: _openRecipientManagement,
+                showRecipientActions:
+                    _stage == _TransferStage.recipient && !_manualEntry,
+              ),
               if (_stage == _TransferStage.confirmation)
                 _TransferReviewPage(bank: _bank ?? '토스뱅크', amount: _amount)
-              else if (_stage == _TransferStage.amount)
+              else if (_stage == _TransferStage.amount && sourceAccount != null)
                 _AmountPage(
+                  sourceAccount: sourceAccount,
                   bank: _bank ?? '토스뱅크',
                   account: _account.isEmpty ? '100237698805' : _account,
+                  recipientName: _recipientName,
                   amount: _amount,
                   onDigit: _appendAmount,
                   onDelete: _deleteAmount,
+                  onChooseSourceAccount: () =>
+                      setState(() => _sourceAccountSelectorVisible = true),
                 )
               else if (_manualEntry)
                 _ManualEntry(
@@ -153,8 +301,17 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                 )
               else
                 _RecipientLanding(
-                  onManual: () => setState(() => _manualEntry = true),
+                  ownAccounts: _ownAccounts,
+                  recipients: _savedRecipients,
+                  myAccountsExpanded: _myAccountsExpanded,
+                  onSearch: _searchRecipients,
+                  onToggleMyAccounts: () => setState(
+                    () => _myAccountsExpanded = !_myAccountsExpanded,
+                  ),
+                  onManual: _startManualEntry,
+                  onCamera: _startManualEntry,
                   onSelect: _chooseRecipient,
+                  onToggleFavorite: _toggleFavorite,
                 ),
               if (_stage != _TransferStage.recipient || _manualEntry)
                 Positioned(
@@ -171,8 +328,8 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                                 })
                               : null)
                         : (_stage == _TransferStage.confirmation
-                              ? null
-                              : _canContinue
+                              ? (blockedRecipient ? null : _completeTransfer)
+                              : _canContinue && sourceAccount != null
                               ? () => setState(
                                   () => _stage = _TransferStage.amount,
                                 )
@@ -194,10 +351,21 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                     ),
                   ),
                 ),
-              if (_stage == _TransferStage.confirmation)
+              if (_stage == _TransferStage.confirmation && blockedRecipient)
                 _TransferConfirmation(
                   onConfirm: () =>
                       setState(() => _stage = _TransferStage.recipient),
+                ),
+              if (_sourceAccountSelectorVisible)
+                _SourceAccountSelector(
+                  accounts: _availableSourceAccounts,
+                  selectedAccount: sourceAccount!,
+                  onSelect: (account) => setState(() {
+                    _sourceAccountId = account.id;
+                    _sourceAccountSelectorVisible = false;
+                  }),
+                  onClose: () =>
+                      setState(() => _sourceAccountSelectorVisible = false),
                 ),
             ],
           ),
@@ -208,185 +376,289 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
 }
 
 class _TopControls extends StatelessWidget {
-  const _TopControls({required this.onBack});
+  const _TopControls({
+    required this.onBack,
+    required this.onManageRecipients,
+    required this.showRecipientActions,
+  });
   final VoidCallback onBack;
+  final VoidCallback onManageRecipients;
+  final bool showRecipientActions;
+
   @override
   Widget build(BuildContext context) => Stack(
     children: [
       Positioned(
-        left: 28,
-        top: 103,
+        left: 24,
+        top: 111,
         child: IconButton(
           key: const Key('transfer-back'),
           onPressed: onBack,
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 25),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 24),
         ),
       ),
+      if (showRecipientActions)
+        const Positioned(
+          right: 142,
+          top: 120,
+          child: Text(
+            '다건이체',
+            key: Key('transfer-multiple'),
+            style: TextStyle(
+              color: _blue,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -.1,
+            ),
+          ),
+        ),
+      if (showRecipientActions)
+        Positioned(
+          right: 84,
+          top: 112,
+          width: 45,
+          height: 45,
+          child: IconButton(
+            key: const Key('transfer-quick-recipient'),
+            onPressed: onManageRecipients,
+            padding: const EdgeInsets.all(6.5),
+            icon: const _RecipientQuickTransferIcon(),
+          ),
+        ),
       Positioned(
-        right: 24,
-        top: 104,
+        right: 21,
+        top: 110,
         child: IconButton(
           key: const Key('transfer-home'),
           onPressed: () =>
               Navigator.of(context).popUntil((route) => route.isFirst),
-          icon: const Icon(Icons.close_rounded, size: 31),
+          icon: const _TransferCloseIcon(),
         ),
       ),
     ],
   );
+}
+
+class _RecipientQuickTransferIcon extends StatelessWidget {
+  const _RecipientQuickTransferIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const CustomPaint(painter: _RecipientQuickTransferPainter());
+  }
+}
+
+class _TransferCloseIcon extends StatelessWidget {
+  const _TransferCloseIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 30,
+      child: CustomPaint(painter: _TransferClosePainter()),
+    );
+  }
+}
+
+class _TransferClosePainter extends CustomPainter {
+  const _TransferClosePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = _ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas
+      ..drawLine(const Offset(5.5, 5.5), const Offset(24.5, 24.5), paint)
+      ..drawLine(const Offset(24.5, 5.5), const Offset(5.5, 24.5), paint);
+  }
+
+  @override
+  bool shouldRepaint(_TransferClosePainter oldDelegate) => false;
+}
+
+class _RecipientQuickTransferPainter extends CustomPainter {
+  const _RecipientQuickTransferPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = _ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.1
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    canvas.drawCircle(const Offset(10, 7), 4, paint);
+
+    final person = Path()
+      ..moveTo(4, 22)
+      ..cubicTo(5, 16.5, 7.5, 14, 11, 14)
+      ..cubicTo(13.5, 14, 15, 15, 16, 16.5);
+    canvas.drawPath(person, paint);
+
+    final arrow = Path()
+      ..moveTo(16, 22)
+      ..lineTo(26, 22)
+      ..moveTo(22, 18)
+      ..lineTo(26, 22)
+      ..lineTo(22, 27);
+    canvas.drawPath(arrow, paint);
+  }
+
+  @override
+  bool shouldRepaint(_RecipientQuickTransferPainter oldDelegate) => false;
 }
 
 class _RecipientLanding extends StatelessWidget {
-  const _RecipientLanding({required this.onManual, required this.onSelect});
+  const _RecipientLanding({
+    required this.ownAccounts,
+    required this.recipients,
+    required this.myAccountsExpanded,
+    required this.onSearch,
+    required this.onToggleMyAccounts,
+    required this.onManual,
+    required this.onCamera,
+    required this.onSelect,
+    required this.onToggleFavorite,
+  });
+  final List<_Recipient> ownAccounts;
+  final List<_Recipient> recipients;
+  final bool myAccountsExpanded;
+  final VoidCallback onSearch;
+  final VoidCallback onToggleMyAccounts;
   final VoidCallback onManual;
+  final VoidCallback onCamera;
   final ValueChanged<_Recipient> onSelect;
-  static const recipients = [
-    _Recipient(
-      'TRINH TRUN',
-      '우리',
-      '1002365702814',
-      'assets/images/recipient_woori_mock.png',
-    ),
-    _Recipient(
-      '정상희',
-      '토스뱅크',
-      '100265855542',
-      'assets/images/recipient_toss_mock.png',
-    ),
-    _Recipient(
-      '양기석(양화감자탕)',
-      '하나',
-      '63491065897607',
-      'assets/images/recipient_hana_mock.png',
-    ),
-    _Recipient(
-      'Npay',
-      '신한',
-      '56020228505759',
-      'assets/images/recipient_shinhan_mock.png',
-    ),
-    _Recipient(
-      'THANH_한패스',
-      '전북',
-      '9105205506132',
-      'assets/images/recipient_jeonbuk_mock.png',
-    ),
-    _Recipient(
-      'LE KIM CUC',
-      '국민',
-      '91800101463625',
-      'assets/images/recipient_kb_mock.png',
-    ),
-    _Recipient(
-      '황지환',
-      '새마을',
-      '9002162430854',
-      'assets/images/recipient_saemaul_mock.png',
-    ),
-    _Recipient(
-      'BUI PHUONG',
-      '토스뱅크',
-      '100263424344',
-      'assets/images/recipient_toss2_mock.png',
-    ),
-  ];
+  final ValueChanged<_Recipient> onToggleFavorite;
   @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      const Positioned(
-        left: 28,
-        top: 188,
-        child: Text(
-          '누구에게 보낼까요?',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -1.5,
-          ),
-        ),
-      ),
-      Positioned(
-        right: 26,
-        top: 196,
-        child: _SquareIcon(icon: Icons.search_rounded, onTap: () {}),
-      ),
-      Positioned(
-        left: 28,
-        right: 28,
-        top: 283,
-        height: 70,
-        child: InkWell(
-          key: const Key('transfer-manual-entry'),
-          onTap: onManual,
-          child: const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '계좌번호 직접 입력',
-              style: TextStyle(fontSize: 21, color: _muted),
+  Widget build(BuildContext context) {
+    final recentOffset = myAccountsExpanded ? ownAccounts.length * 97.0 : 0.0;
+    return Stack(
+      children: [
+        const Positioned(
+          left: 28,
+          top: 201,
+          child: Text(
+            '누구에게 보낼까요?',
+            style: TextStyle(
+              fontSize: 34,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -1.5,
             ),
           ),
         ),
-      ),
-      Positioned(
-        right: 28,
-        top: 296,
-        child: IconButton(
-          key: const Key('transfer-camera'),
-          onPressed: () {},
-          icon: const Icon(Icons.photo_camera_outlined, size: 30),
-        ),
-      ),
-      const Positioned(
-        left: 28,
-        right: 28,
-        top: 354,
-        child: Divider(color: _line, height: 1),
-      ),
-      const Positioned(
-        left: 28,
-        top: 387,
-        child: Text(
-          '내 계좌',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-      ),
-      const Positioned(
-        right: 28,
-        top: 375,
-        child: _CountChip('0개', Icons.keyboard_arrow_down_rounded),
-      ),
-      const Positioned(
-        left: 28,
-        top: 461,
-        child: Text(
-          '최근',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-      ),
-      const Positioned(
-        right: 28,
-        top: 449,
-        child: _CountChip('50개', Icons.keyboard_arrow_up_rounded),
-      ),
-      ...List.generate(
-        recipients.length,
-        (i) => Positioned(
-          left: 28,
-          right: 25,
-          top: 515 + (i * 97),
-          height: 78,
-          child: _RecipientRow(
-            recipient: recipients[i],
-            onTap: () => onSelect(recipients[i]),
+        Positioned(
+          right: 26,
+          top: 196,
+          child: _SquareIcon(
+            key: const Key('transfer-recipient-search'),
+            icon: Icons.search_rounded,
+            onTap: onSearch,
           ),
         ),
-      ),
-    ],
-  );
+        Positioned(
+          left: 28,
+          right: 28,
+          top: 283,
+          height: 70,
+          child: InkWell(
+            key: const Key('transfer-manual-entry'),
+            onTap: onManual,
+            child: const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '계좌번호 직접 입력',
+                style: TextStyle(fontSize: 21, color: _muted),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 28,
+          top: 296,
+          child: IconButton(
+            key: const Key('transfer-camera'),
+            onPressed: onCamera,
+            icon: const Icon(Icons.photo_camera_outlined, size: 30),
+          ),
+        ),
+        const Positioned(
+          left: 28,
+          right: 28,
+          top: 354,
+          child: Divider(color: _line, height: 1),
+        ),
+        const Positioned(
+          left: 28,
+          top: 387,
+          child: Text(
+            '내 계좌',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+        ),
+        Positioned(
+          right: 28,
+          top: 375,
+          child: _CountChip(
+            myAccountsExpanded ? '${ownAccounts.length}개' : '0개',
+            myAccountsExpanded
+                ? Icons.keyboard_arrow_up_rounded
+                : Icons.keyboard_arrow_down_rounded,
+            key: const Key('transfer-my-accounts-toggle'),
+            onTap: onToggleMyAccounts,
+          ),
+        ),
+        if (myAccountsExpanded)
+          ...List.generate(
+            ownAccounts.length,
+            (index) => Positioned(
+              left: 28,
+              right: 25,
+              top: 431 + (index * 97),
+              height: 78,
+              child: _RecipientRow(
+                recipient: ownAccounts[index],
+                onTap: () => onSelect(ownAccounts[index]),
+              ),
+            ),
+          ),
+        Positioned(
+          left: 28,
+          top: 461 + recentOffset,
+          child: const Text(
+            '최근',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+        ),
+        Positioned(
+          right: 28,
+          top: 449 + recentOffset,
+          child: const _CountChip('50개', Icons.keyboard_arrow_up_rounded),
+        ),
+        ...List.generate(
+          recipients.length,
+          (i) => Positioned(
+            left: 28,
+            right: 25,
+            top: 515 + recentOffset + (i * 97),
+            height: 78,
+            child: _RecipientRow(
+              recipient: recipients[i],
+              onTap: () => onSelect(recipients[i]),
+              onFavorite: () => onToggleFavorite(recipients[i]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _SquareIcon extends StatelessWidget {
-  const _SquareIcon({required this.icon, required this.onTap});
+  const _SquareIcon({super.key, required this.icon, required this.onTap});
   final IconData icon;
   final VoidCallback onTap;
   @override
@@ -406,37 +678,61 @@ class _SquareIcon extends StatelessWidget {
 }
 
 class _CountChip extends StatelessWidget {
-  const _CountChip(this.text, this.icon);
+  const _CountChip(this.text, this.icon, {super.key, this.onTap});
   final String text;
   final IconData icon;
+  final VoidCallback? onTap;
+
   @override
-  Widget build(BuildContext context) => Container(
-    height: 46,
-    padding: const EdgeInsets.symmetric(horizontal: 15),
-    decoration: BoxDecoration(
-      border: Border.all(color: const Color(0xFFF0F1F4)),
-      borderRadius: BorderRadius.circular(25),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(text, style: const TextStyle(fontSize: 17)),
-        Icon(icon),
-      ],
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(25),
+    child: Container(
+      height: 46,
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFF0F1F4)),
+        borderRadius: BorderRadius.circular(25),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(text, style: const TextStyle(fontSize: 17)),
+          Icon(icon),
+        ],
+      ),
     ),
   );
 }
 
 class _Recipient {
-  const _Recipient(this.name, this.bank, this.account, this.logoAsset);
+  const _Recipient(
+    this.name,
+    this.bank,
+    this.account,
+    this.logoAsset, {
+    this.bankCode,
+    this.internalAccountId,
+    this.recipientId,
+    this.favorite = false,
+  });
   final String name, bank, account;
   final String logoAsset;
+  final String? bankCode;
+  final String? internalAccountId;
+  final String? recipientId;
+  final bool favorite;
 }
 
 class _RecipientRow extends StatelessWidget {
-  const _RecipientRow({required this.recipient, required this.onTap});
+  const _RecipientRow({
+    required this.recipient,
+    required this.onTap,
+    this.onFavorite,
+  });
   final _Recipient recipient;
   final VoidCallback onTap;
+  final VoidCallback? onFavorite;
   @override
   Widget build(BuildContext context) => InkWell(
     key: Key('recipient-${recipient.name}'),
@@ -444,12 +740,21 @@ class _RecipientRow extends StatelessWidget {
     borderRadius: BorderRadius.circular(15),
     child: Row(
       children: [
-        Image.asset(
-          recipient.logoAsset,
+        SizedBox(
           width: 50,
           height: 50,
-          filterQuality: FilterQuality.high,
-          fit: BoxFit.contain,
+          child: ClipRect(
+            child: Transform.scale(
+              scale: BankCatalog.logoScale(
+                recipient.bankCode ?? recipient.bank,
+              ),
+              child: Image.asset(
+                recipient.logoAsset,
+                filterQuality: FilterQuality.high,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
         ),
         const SizedBox(width: 13),
         Expanded(
@@ -471,14 +776,96 @@ class _RecipientRow extends StatelessWidget {
             ],
           ),
         ),
-        const Icon(
-          Icons.star_border_rounded,
-          size: 31,
-          color: Color(0xFF657084),
-        ),
+        if (onFavorite == null)
+          const Icon(
+            Icons.star_border_rounded,
+            size: 31,
+            color: Color(0xFF657084),
+          )
+        else
+          GestureDetector(
+            key: Key('recipient-favorite-${recipient.recipientId}'),
+            behavior: HitTestBehavior.opaque,
+            onTap: onFavorite,
+            child: Icon(
+              recipient.favorite
+                  ? Icons.star_rounded
+                  : Icons.star_border_rounded,
+              size: 31,
+              color: recipient.favorite
+                  ? const Color(0xFFFFB300)
+                  : const Color(0xFF657084),
+            ),
+          ),
       ],
     ),
   );
+}
+
+class _RecipientSearchDelegate extends SearchDelegate<_Recipient?> {
+  _RecipientSearchDelegate(this.recipients);
+
+  final List<_Recipient> recipients;
+
+  List<_Recipient> get _matches {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return recipients;
+    return recipients.where((recipient) {
+      return recipient.name.toLowerCase().contains(normalized) ||
+          recipient.bank.toLowerCase().contains(normalized) ||
+          recipient.account.toLowerCase().contains(normalized);
+    }).toList();
+  }
+
+  @override
+  String get searchFieldLabel => '이름, 은행, 계좌번호 검색';
+
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+    if (query.isNotEmpty)
+      IconButton(
+        key: const Key('recipient-search-clear'),
+        onPressed: () => query = '',
+        icon: const Icon(Icons.clear_rounded),
+      ),
+  ];
+
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(
+    key: const Key('recipient-search-back'),
+    onPressed: () => close(context, null),
+    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+  );
+
+  @override
+  Widget buildResults(BuildContext context) => _buildMatches();
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildMatches();
+
+  Widget _buildMatches() {
+    final matches = _matches;
+    if (matches.isEmpty) {
+      return const Center(child: Text('검색 결과가 없습니다.'));
+    }
+    return ListView.builder(
+      key: const Key('recipient-search-results'),
+      itemCount: matches.length,
+      itemBuilder: (context, index) {
+        final recipient = matches[index];
+        return ListTile(
+          key: Key('recipient-search-${recipient.name}'),
+          leading: BankLogo(
+            bankCode: recipient.bankCode ?? recipient.bank,
+            size: 42,
+          ),
+          title: Text(recipient.name),
+          subtitle: Text('${recipient.bank} ${recipient.account}'),
+          onTap: () => close(context, recipient),
+        );
+      },
+    );
+  }
 }
 
 class _ManualEntry extends StatelessWidget {
@@ -499,11 +886,11 @@ class _ManualEntry extends StatelessWidget {
     children: [
       const Positioned(
         left: 28,
-        top: 188,
+        top: 201,
         child: Text(
           '누구에게 보낼까요?',
           style: TextStyle(
-            fontSize: 30,
+            fontSize: 34,
             fontWeight: FontWeight.w700,
             letterSpacing: -1.5,
           ),
@@ -672,16 +1059,22 @@ class _TinyChip extends StatelessWidget {
 
 class _AmountPage extends StatelessWidget {
   const _AmountPage({
+    required this.sourceAccount,
     required this.bank,
     required this.account,
+    required this.recipientName,
     required this.amount,
     required this.onDigit,
     required this.onDelete,
+    required this.onChooseSourceAccount,
   });
+  final _SourceAccount sourceAccount;
   final String bank, account;
+  final String? recipientName;
   final int amount;
   final ValueChanged<String> onDigit;
   final VoidCallback onDelete;
+  final VoidCallback onChooseSourceAccount;
   @override
   Widget build(BuildContext context) {
     final entered = amount > 0;
@@ -694,13 +1087,31 @@ class _AmountPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '[금융거래한도계좌2]저축예금 계좌에서⌄',
-                style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700),
+              InkWell(
+                key: const Key('source-account-selector'),
+                onTap: onChooseSourceAccount,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${sourceAccount.productName} 계좌에서',
+                        style: const TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.keyboard_arrow_down_rounded, size: 28),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                '아래 계좌로',
+              Text(
+                recipientName == null ? '아래 계좌로' : '$recipientName 계좌로',
                 style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 5),
@@ -727,7 +1138,9 @@ class _AmountPage extends StatelessWidget {
               ),
               const SizedBox(height: 13),
               Text(
-                entered ? '${_formatted(amount)}원' : '출금가능금액 388,489원',
+                entered
+                    ? '${_formatted(amount)}원'
+                    : '출금가능금액 ${_formatted(sourceAccount.availableBalance)}원',
                 style: const TextStyle(fontSize: 19, color: _muted),
               ),
             ],
@@ -758,6 +1171,198 @@ class _AmountPage extends StatelessWidget {
   static String _formatted(int value) => value.toString().replaceAllMapped(
     RegExp(r'(?<!^)(?=(\d{3})+$)'),
     (_) => ',',
+  );
+}
+
+class _SourceAccount {
+  const _SourceAccount({
+    required this.id,
+    required this.productName,
+    required this.bankCode,
+    required this.bank,
+    required this.accountNumber,
+    required this.availableBalance,
+  });
+
+  final String id;
+  final String productName;
+  final String bankCode;
+  final String bank;
+  final String accountNumber;
+  final int availableBalance;
+
+  String get logoAsset => BankCatalog.logoAsset(bankCode);
+}
+
+class _SourceAccountSelector extends StatelessWidget {
+  const _SourceAccountSelector({
+    required this.accounts,
+    required this.selectedAccount,
+    required this.onSelect,
+    required this.onClose,
+  });
+
+  final List<_SourceAccount> accounts;
+  final _SourceAccount selectedAccount;
+  final ValueChanged<_SourceAccount> onSelect;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      key: const Key('source-account-sheet'),
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            key: const Key('source-account-sheet-barrier'),
+            onTap: onClose,
+            child: const ColoredBox(color: Color(0x92535A65)),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 490,
+          child: Material(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                const Positioned(
+                  left: 29,
+                  top: 31,
+                  child: Text(
+                    '출금계좌 선택',
+                    style: TextStyle(fontSize: 25, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Positioned(
+                  right: 24,
+                  top: 24,
+                  child: IconButton(
+                    key: const Key('source-account-sheet-close'),
+                    onPressed: onClose,
+                    icon: const _TransferCloseIcon(),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 102,
+                  bottom: 0,
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: accounts.length,
+                    itemExtent: 194,
+                    itemBuilder: (context, index) {
+                      final account = accounts[index];
+                      return _SourceAccountOption(
+                        account: account,
+                        selected: account.id == selectedAccount.id,
+                        onTap: () => onSelect(account),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SourceAccountOption extends StatelessWidget {
+  const _SourceAccountOption({
+    required this.account,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _SourceAccount account;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    key: Key('source-account-option-${account.bank}-${account.accountNumber}'),
+    onTap: onTap,
+    child: ColoredBox(
+      color: selected ? const Color(0xFFEAF1FF) : Colors.white,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 28,
+            top: 31,
+            width: 54,
+            height: 54,
+            child: ClipRect(
+              child: Transform.scale(
+                scale: BankCatalog.logoScale(account.bankCode),
+                child: Image.asset(account.logoAsset, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 91,
+            top: 31,
+            right: 58,
+            child: Text(
+              account.productName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Positioned(
+            left: 91,
+            top: 67,
+            child: Text(
+              '${account.bank} ${account.accountNumber}',
+              style: const TextStyle(fontSize: 18, color: _muted),
+            ),
+          ),
+          if (selected)
+            const Positioned(
+              right: 31,
+              top: 35,
+              child: Icon(
+                Icons.check_rounded,
+                color: _blue,
+                size: 29,
+                weight: 700,
+              ),
+            ),
+          Positioned(
+            right: 30,
+            bottom: 30,
+            child: Text.rich(
+              TextSpan(
+                style: const TextStyle(fontSize: 18, color: _muted),
+                children: [
+                  const TextSpan(text: '출금가능금액  '),
+                  TextSpan(
+                    text:
+                        '${_AmountPage._formatted(account.availableBalance)}원',
+                    style: const TextStyle(
+                      color: _ink,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              key: Key(
+                'source-account-balance-${account.bank}-${account.accountNumber}',
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -859,58 +1464,12 @@ class _BankSelectorDialog extends StatefulWidget {
 
 class _BankSelectorDialogState extends State<_BankSelectorDialog> {
   bool securities = false;
-  static const banks = [
-    '신한',
-    '제주',
-    '국민',
-    '기업',
-    '농협',
-    '산업',
-    '수협',
-    '신협',
-    '우리',
-    '하나',
-    '한국씨티',
-    '카카오뱅크',
-    '케이뱅크',
-    '토스뱅크',
-    '경남',
-    '광주',
-    '아이엠뱅크(대구)',
-    '부산',
-    '전북',
-    '회원수협',
-    '새마을',
-    '우체국',
-    '저축은행',
-    '지역농·축협',
-    '도이치',
-    '중국',
-    '중국건설',
-    '중국공상',
-    'BNP파리바',
-    'BOA',
-    'HSBC',
-    'JP모간',
-    'SC',
-    '산림조합',
-    '국세',
-    '지방세',
-    '국고',
-    '관세',
-  ];
-  static const securitiesNames = [
-    '교보증권',
-    '대신증권',
-    '미래에셋증권',
-    '삼성증권',
-    '신한투자증권',
-    '키움증권',
-  ];
 
   @override
   Widget build(BuildContext context) {
-    final names = securities ? securitiesNames : banks;
+    final names = securities
+        ? BankCatalog.securitiesCodes
+        : BankCatalog.bankCodes;
     return Material(
       color: Colors.transparent,
       child: Stack(
@@ -969,7 +1528,11 @@ class _BankSelectorDialogState extends State<_BankSelectorDialog> {
                     ),
                     Expanded(
                       child: GridView.builder(
-                        key: const Key('bank-selector-list'),
+                        key: Key(
+                          securities
+                              ? 'bank-selector-list-securities'
+                              : 'bank-selector-list-banks',
+                        ),
                         padding: const EdgeInsets.fromLTRB(28, 29, 28, 34),
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
@@ -1013,6 +1576,7 @@ class _BankTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Expanded(
     child: InkWell(
+      key: Key('bank-tab-$label'),
       onTap: onTap,
       child: Container(
         height: 78,
@@ -1051,10 +1615,7 @@ class _BankTile extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
-    final asset = _bankLogoAssets[name]?.replaceFirst(
-      '_mock.png',
-      '_transparent.png',
-    );
+    final asset = BankCatalog.tryLogoAsset(name);
     const colors = [
       Color(0xFF0959DD),
       Color(0xFF3979D8),
@@ -1069,19 +1630,28 @@ class _BankTile extends StatelessWidget {
       key: Key('bank-$name'),
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
+      child: Container(
         height: 138,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F3FA),
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: Column(
           children: [
-            const SizedBox(height: 7),
+            const SizedBox(height: 17),
             SizedBox(
-              width: 52,
-              height: 52,
+              width: 50,
+              height: 50,
               child: asset != null
-                  ? Image.asset(
-                      asset,
-                      filterQuality: FilterQuality.medium,
-                      fit: BoxFit.contain,
+                  ? ClipRect(
+                      child: Transform.scale(
+                        scale: BankCatalog.logoScale(name),
+                        child: Image.asset(
+                          asset,
+                          filterQuality: FilterQuality.high,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     )
                   : Container(
                       alignment: Alignment.center,
@@ -1099,7 +1669,7 @@ class _BankTile extends StatelessWidget {
                       ),
                     ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 11),
             Text(
               name,
               maxLines: 1,
@@ -1122,10 +1692,7 @@ class _TransferReviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logoAsset = _bankLogoAssets[bank]?.replaceFirst(
-      '_mock.png',
-      '_transparent.png',
-    );
+    final logoAsset = BankCatalog.tryLogoAsset(bank);
     return Stack(
       children: [
         Positioned(
@@ -1148,10 +1715,15 @@ class _TransferReviewPage extends StatelessWidget {
                       color: _blue,
                       size: 46,
                     )
-                  : Image.asset(
-                      logoAsset,
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.medium,
+                  : ClipRect(
+                      child: Transform.scale(
+                        scale: BankCatalog.logoScale(bank),
+                        child: Image.asset(
+                          logoAsset,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      ),
                     ),
             ),
           ),

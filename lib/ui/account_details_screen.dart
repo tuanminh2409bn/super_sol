@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_data.dart';
 import '../core/auth_service.dart';
+import 'bank_logo.dart';
+import 'data_management_screen.dart';
 import 'design_canvas.dart';
 import 'transfer_recipient_screen.dart';
 
@@ -10,13 +13,17 @@ const _detailsBlue = Color(0xFF0068F5);
 const _detailsDivider = Color(0xFFF1F4F8);
 
 class AccountDetailsScreen extends StatefulWidget {
-  const AccountDetailsScreen({
+  AccountDetailsScreen({
     super.key,
     required this.auth,
     this.initialScrollOffset = 0,
-  });
+    AppDataStore? dataStore,
+    this.accountId,
+  }) : dataStore = dataStore ?? AppDataStore.shared;
 
   final AuthService auth;
+  final AppDataStore dataStore;
+  final String? accountId;
   final double initialScrollOffset;
 
   @override
@@ -35,6 +42,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
     _scrollController = ScrollController(
       initialScrollOffset: widget.initialScrollOffset,
     )..addListener(_handleScroll);
+    widget.dataStore.addListener(_handleDataChange);
   }
 
   void _handleScroll() {
@@ -47,6 +55,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
 
   @override
   void dispose() {
+    widget.dataStore.removeListener(_handleDataChange);
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
@@ -55,6 +64,10 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
       backgroundColor: const Color(0xFFF0F3FA),
     );
     super.dispose();
+  }
+
+  void _handleDataChange() {
+    if (mounted) setState(() {});
   }
 
   void _goHome() {
@@ -74,11 +87,35 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
 
   Future<void> _openTransferRecipient() async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const TransferRecipientScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => TransferRecipientScreen(dataStore: widget.dataStore),
+      ),
     );
     if (mounted) {
       showDeviceStatusBar(darkIcons: true, backgroundColor: Colors.white);
     }
+  }
+
+  Future<void> _openManagement() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DataManagementScreen(
+          store: widget.dataStore,
+          initialAccountId: _selectedAccount?.id,
+        ),
+      ),
+    );
+  }
+
+  BankAccount? get _selectedAccount {
+    final activeAccounts = widget.dataStore.accounts;
+    final requested = widget.accountId;
+    if (requested != null) {
+      for (final account in activeAccounts) {
+        if (account.id == requested) return account;
+      }
+    }
+    return activeAccounts.firstOrNull;
   }
 
   @override
@@ -86,6 +123,14 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
     final accountLabel = widget.auth.isSignedIn
         ? designDisplayName
         : 'TÀI KHOẢN';
+    final account = _selectedAccount;
+    final transactions = account == null
+        ? const <LedgerTransaction>[]
+        : widget.dataStore.transactionsFor(account.id);
+    final estimatedContentHeight = 760.0 + (transactions.length * 125);
+    final contentHeight = estimatedContentHeight > 1780
+        ? estimatedContentHeight
+        : 1780.0;
     final collapsed = _scrollOffset >= 340;
 
     return DesignCanvas(
@@ -100,11 +145,22 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
               physics: const BouncingScrollPhysics(),
               child: SizedBox(
                 width: mockupWidth,
-                height: 1780,
+                height: contentHeight,
                 child: Stack(
                   children: [
-                    _AccountSummary(onTransfer: _openTransferRecipient),
-                    _TransactionList(accountName: accountLabel),
+                    _AccountSummary(
+                      account: account,
+                      balance: account == null
+                          ? 0
+                          : widget.dataStore.balanceFor(account.id),
+                      onTransfer: _openTransferRecipient,
+                    ),
+                    _TransactionList(
+                      accountName: accountLabel,
+                      account: account,
+                      transactions: transactions,
+                      store: widget.dataStore,
+                    ),
                   ],
                 ),
               ),
@@ -134,7 +190,11 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
             ),
             const _FilterBar(top: 214),
           ],
-          _DetailsHeader(onBack: _goHome, onHome: _goHome),
+          _DetailsHeader(
+            onBack: _goHome,
+            onHome: _goHome,
+            onManage: _openManagement,
+          ),
           if (collapsed)
             Positioned(
               right: 29,
@@ -171,10 +231,15 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
 }
 
 class _DetailsHeader extends StatelessWidget {
-  const _DetailsHeader({required this.onBack, required this.onHome});
+  const _DetailsHeader({
+    required this.onBack,
+    required this.onHome,
+    required this.onManage,
+  });
 
   final VoidCallback onBack;
   final VoidCallback onHome;
+  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -201,33 +266,35 @@ class _DetailsHeader extends StatelessWidget {
               ),
             ),
           ),
-          const Positioned(
-            right: 85,
-            top: 14,
-            child: Text(
-              '계좌관리',
-              style: TextStyle(
-                color: _detailsBlue,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -.8,
+          Positioned(
+            right: 78,
+            top: 2,
+            width: 94,
+            height: 50,
+            child: TextButton(
+              key: const Key('account-manage'),
+              onPressed: onManage,
+              child: const Text(
+                '계좌관리',
+                style: TextStyle(
+                  color: _detailsBlue,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -.8,
+                ),
               ),
             ),
           ),
           Positioned(
-            right: 25,
-            top: 1,
+            right: 19,
+            top: 5,
             width: 50,
             height: 50,
             child: IconButton(
               key: const Key('account-home'),
               onPressed: onHome,
               padding: EdgeInsets.zero,
-              icon: const Icon(
-                Icons.home_outlined,
-                size: 34,
-                color: _detailsInk,
-              ),
+              icon: const _AccountHomeIcon(key: Key('account-home-glyph')),
             ),
           ),
         ],
@@ -237,8 +304,14 @@ class _DetailsHeader extends StatelessWidget {
 }
 
 class _AccountSummary extends StatelessWidget {
-  const _AccountSummary({required this.onTransfer});
+  const _AccountSummary({
+    required this.account,
+    required this.balance,
+    required this.onTransfer,
+  });
 
+  final BankAccount? account;
+  final int balance;
   final VoidCallback onTransfer;
 
   @override
@@ -267,22 +340,21 @@ class _AccountSummary extends StatelessWidget {
             ),
           ),
         ),
-        const Positioned(
+        Positioned(
           left: 28,
           top: 245,
           width: 58,
           height: 58,
-          child: Image(
-            image: AssetImage('assets/images/shinhan_logo.png'),
-            fit: BoxFit.fill,
-          ),
+          child: account == null
+              ? const Icon(Icons.account_balance_rounded)
+              : BankLogo(bankCode: account!.bankCode, size: 58),
         ),
-        const Positioned(
+        Positioned(
           left: 91,
           top: 248,
           child: Text(
-            '[금융거래한도계좌2]저축예금',
-            style: TextStyle(
+            account?.accountType ?? '등록된 계좌가 없습니다',
+            style: const TextStyle(
               color: Color(0xFF2D323C),
               fontSize: 22,
               fontWeight: FontWeight.w600,
@@ -290,12 +362,14 @@ class _AccountSummary extends StatelessWidget {
             ),
           ),
         ),
-        const Positioned(
+        Positioned(
           left: 91,
           top: 291,
           child: Text(
-            '신한 110-628-103680',
-            style: TextStyle(
+            account == null
+                ? '-'
+                : '${account!.bankDisplayName} ${account!.accountNumber}',
+            style: const TextStyle(
               color: Color(0xFF454B57),
               fontSize: 18,
               letterSpacing: -.5,
@@ -303,20 +377,16 @@ class _AccountSummary extends StatelessWidget {
           ),
         ),
         const Positioned(
-          right: 29,
-          top: 247,
-          child: Icon(
-            Icons.center_focus_weak_rounded,
-            size: 32,
-            color: _detailsInk,
-          ),
+          right: 30,
+          top: 245,
+          child: _AccountScanIcon(key: Key('account-scan-icon')),
         ),
-        const Positioned(
+        Positioned(
           left: 28,
           top: 339,
           child: Text(
-            '388,489원',
-            style: TextStyle(
+            '${_formatDetailsMoney(balance)}원',
+            style: const TextStyle(
               color: _detailsInk,
               fontSize: 34,
               fontWeight: FontWeight.w700,
@@ -324,12 +394,12 @@ class _AccountSummary extends StatelessWidget {
             ),
           ),
         ),
-        const Positioned(
+        Positioned(
           left: 28,
           top: 389,
           child: Text(
-            '출금가능금액 388,489원',
-            style: TextStyle(
+            '출금가능금액 ${_formatDetailsMoney(balance)}원',
+            style: const TextStyle(
               color: _detailsMuted,
               fontSize: 18,
               letterSpacing: -.5,
@@ -375,116 +445,194 @@ class _AccountSummary extends StatelessWidget {
   }
 }
 
+class _AccountHomeIcon extends StatelessWidget {
+  const _AccountHomeIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 30,
+      child: CustomPaint(painter: _AccountHomePainter()),
+    );
+  }
+}
+
+class _AccountHomePainter extends CustomPainter {
+  const _AccountHomePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = _detailsInk
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final home = Path()
+      ..moveTo(3, 12)
+      ..lineTo(15, 2.5)
+      ..lineTo(26.5, 12)
+      ..moveTo(5, 10.5)
+      ..lineTo(5, 26.5)
+      ..lineTo(12, 26.5)
+      ..lineTo(12, 17.5)
+      ..lineTo(18, 17.5)
+      ..lineTo(18, 26.5)
+      ..lineTo(24.5, 26.5)
+      ..lineTo(24.5, 10.5);
+
+    canvas.drawPath(home, paint);
+  }
+
+  @override
+  bool shouldRepaint(_AccountHomePainter oldDelegate) => false;
+}
+
+class _AccountScanIcon extends StatelessWidget {
+  const _AccountScanIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 30,
+      child: CustomPaint(painter: _AccountScanPainter()),
+    );
+  }
+}
+
+class _AccountScanPainter extends CustomPainter {
+  const _AccountScanPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = _detailsInk
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.square
+      ..strokeJoin = StrokeJoin.miter;
+
+    final corners = Path()
+      ..moveTo(4.5, 10.5)
+      ..lineTo(4.5, 4)
+      ..lineTo(11, 4)
+      ..moveTo(19, 4)
+      ..lineTo(25.5, 4)
+      ..lineTo(25.5, 10.5)
+      ..moveTo(25.5, 19.5)
+      ..lineTo(25.5, 27)
+      ..lineTo(19, 27)
+      ..moveTo(11, 27)
+      ..lineTo(4.5, 27)
+      ..lineTo(4.5, 19.5);
+    canvas.drawPath(corners, paint);
+
+    final plusPaint = Paint()
+      ..color = _detailsInk
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas
+      ..drawLine(const Offset(11, 15), const Offset(19, 15), plusPaint)
+      ..drawLine(const Offset(15, 11), const Offset(15, 19), plusPaint);
+  }
+
+  @override
+  bool shouldRepaint(_AccountScanPainter oldDelegate) => false;
+}
+
 class _TransactionList extends StatelessWidget {
-  const _TransactionList({required this.accountName});
+  const _TransactionList({
+    required this.accountName,
+    required this.account,
+    required this.transactions,
+    required this.store,
+  });
 
   final String accountName;
+  final BankAccount? account;
+  final List<LedgerTransaction> transactions;
+  final AppDataStore store;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
-      children: [
-        const _FilterBar(top: 558),
-        const Positioned(
-          left: 28,
-          top: 652,
-          child: Text(
-            '7월 22일',
-            style: TextStyle(
-              color: _detailsMuted,
-              fontSize: 18,
-              letterSpacing: -.6,
-            ),
-          ),
-        ),
-        _TransactionRow(
-          top: 704,
-          title: accountName,
-          time: '10:32:08 · 모바일',
-          amount: '-1,000원',
-          balance: '388,489원',
-        ),
-        const _TransactionRow(
-          top: 814,
-          title: '정상희',
-          time: '07:00:34 · 모바일',
-          amount: '-6,100원',
-          balance: '389,489원',
-        ),
-        const _TransactionRow(
-          top: 924,
-          title: '양기석(양화감자탕(',
-          time: '01:34:45 · 모바일',
-          amount: '-40,000원',
-          balance: '395,589원',
-        ),
-        const Positioned(
-          left: 28,
-          right: 28,
-          top: 1048,
-          child: Divider(height: 1, color: Color(0xFFE8EBF0)),
-        ),
-        const Positioned(
-          left: 28,
-          top: 1090,
-          child: Text(
-            '7월 21일',
-            style: TextStyle(
-              color: _detailsMuted,
-              fontSize: 18,
-              letterSpacing: -.6,
-            ),
-          ),
-        ),
-        const _TransactionRow(
-          top: 1138,
-          title: 'Npay',
-          time: '17:58:07 · 모바일',
-          amount: '-104,700원',
-          balance: '435,589원',
-        ),
-        const _TransactionRow(
-          top: 1248,
-          title: 'THANH_한패스',
-          time: '16:30:45 · 모바일',
-          amount: '-20,000원',
-          balance: '540,289원',
-        ),
-        const _TransactionRow(
-          top: 1358,
-          title: 'LEKIMCUC',
-          time: '01:36:21 · 타행모바일뱅킹',
-          amount: '+200,000원',
-          balance: '560,289원',
-          positive: true,
-        ),
-        const _TransactionRow(
-          top: 1468,
-          title: 'LE KIM CUC',
-          time: '00:06:10 · 모바일',
-          amount: '-200,000원',
-          balance: '360,289원',
-        ),
-        const Positioned(
-          left: 28,
-          right: 28,
-          top: 1587,
-          child: Divider(height: 1, color: Color(0xFFE8EBF0)),
-        ),
-        const Positioned(
-          left: 28,
-          top: 1626,
-          child: Text(
-            '7월 20일',
-            style: TextStyle(
-              color: _detailsMuted,
-              fontSize: 18,
-              letterSpacing: -.6,
-            ),
-          ),
-        ),
-      ],
+      children: [const _FilterBar(top: 558), ..._transactionWidgets()],
     );
+  }
+
+  List<Widget> _transactionWidgets() {
+    if (account == null || transactions.isEmpty) {
+      return const [
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 680,
+          child: Text(
+            '거래내역이 없습니다.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _detailsMuted, fontSize: 18),
+          ),
+        ),
+      ];
+    }
+    final widgets = <Widget>[];
+    var cursor = 652.0;
+    String? previousDate;
+    for (final transaction in transactions) {
+      final dateKey =
+          '${transaction.occurredAt.year}-${transaction.occurredAt.month}-'
+          '${transaction.occurredAt.day}';
+      if (dateKey != previousDate) {
+        if (previousDate != null) {
+          widgets.add(
+            Positioned(
+              left: 28,
+              right: 28,
+              top: cursor + 4,
+              child: const Divider(height: 1, color: Color(0xFFE8EBF0)),
+            ),
+          );
+          cursor += 46;
+        }
+        widgets.add(
+          Positioned(
+            left: 28,
+            top: cursor,
+            child: Text(
+              '${transaction.occurredAt.month}월 '
+              '${transaction.occurredAt.day}일',
+              style: const TextStyle(
+                color: _detailsMuted,
+                fontSize: 18,
+                letterSpacing: -.6,
+              ),
+            ),
+          ),
+        );
+        cursor += 52;
+        previousDate = dateKey;
+      }
+      final signed = transaction.signedAmount;
+      widgets.add(
+        _TransactionRow(
+          top: cursor,
+          title: transaction.title,
+          time:
+              '${_formatDetailsTime(transaction.occurredAt)} · '
+              '${transaction.channel}',
+          amount:
+              '${signed >= 0 ? '+' : '-'}'
+              '${_formatDetailsMoney(signed.abs())}원',
+          balance:
+              '${_formatDetailsMoney(store.runningBalanceFor(transaction))}원',
+          positive: signed >= 0,
+        ),
+      );
+      cursor += 110;
+    }
+    return widgets;
   }
 }
 
@@ -620,4 +768,14 @@ class _TransactionRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDetailsMoney(int value) => value.toString().replaceAllMapped(
+  RegExp(r'(?<!^)(?=(\d{3})+$)'),
+  (_) => ',',
+);
+
+String _formatDetailsTime(DateTime value) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(value.hour)}:${two(value.minute)}:${two(value.second)}';
 }

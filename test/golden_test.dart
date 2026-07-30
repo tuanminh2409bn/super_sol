@@ -129,11 +129,111 @@ void main() {
       matchesGoldenFile('goldens/4_2_account_scrolled.png'),
     );
 
-    await tester.pumpWidget(_host(const TransferRecipientScreen()));
+    await tester.pumpWidget(_host(TransferRecipientScreen()));
+    await _precache(tester, const [
+      'assets/images/recipient_woori_mock.png',
+      'assets/images/recipient_toss_mock.png',
+      'assets/images/recipient_hana_mock.png',
+      'assets/images/recipient_shinhan_mock.png',
+      'assets/images/recipient_jeonbuk_mock.png',
+      'assets/images/recipient_kb_mock.png',
+      'assets/images/recipient_saemaul_mock.png',
+      'assets/images/recipient_toss2_mock.png',
+    ]);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/5_transfer_recipients.png'),
+    );
+
+    await tester.tap(find.byKey(const Key('recipient-TRINH TRUN')));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/9_transfer_saved_recipient.png'),
+    );
+    await tester.tap(find.byKey(const Key('source-account-selector')));
+    await _precache(tester, const [
+      'assets/images/bank_shinhan_transparent.png',
+    ]);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/12_source_account_selector.png'),
+    );
+    await tester.tap(find.byKey(const Key('source-account-sheet-close')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('transfer-back')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('transfer-my-accounts-toggle')));
+    await _precache(tester, const [
+      'assets/images/bank_shinhan_transparent.png',
+    ]);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/5_transfer_my_account.png'),
+    );
+    await tester.tap(find.byKey(const Key('transfer-my-accounts-toggle')));
+    await tester.pump();
+
     await tester.tap(find.byKey(const Key('transfer-manual-entry')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('account-key-1')));
     await tester.tap(find.byKey(const Key('transfer-bank-selector')));
+    await _precache(tester, const [
+      'assets/images/bank_shinhan_transparent.png',
+      'assets/images/bank_jeju_transparent.png',
+      'assets/images/bank_kb_transparent.png',
+      'assets/images/bank_ibk_transparent.png',
+      'assets/images/bank_nh_transparent.png',
+      'assets/images/bank_kdb_transparent.png',
+      'assets/images/bank_suhyup_transparent.png',
+      'assets/images/bank_shinhyup_transparent.png',
+      'assets/images/bank_woori_transparent.png',
+      'assets/images/bank_hana_transparent.png',
+      'assets/images/bank_citi_transparent.png',
+      'assets/images/bank_kakao_transparent.png',
+      'assets/images/bank_kbank_transparent.png',
+      'assets/images/bank_toss_transparent.png',
+      'assets/images/bank_kyongnam_transparent.png',
+      'assets/images/bank_gwangju_transparent.png',
+      'assets/images/bank_im_transparent.png',
+      'assets/images/bank_busan_transparent.png',
+    ]);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/8_bank_selector.png'),
+    );
+    await tester.tap(find.byKey(const Key('bank-tab-증권사')));
+    await _precache(tester, const [
+      'assets/images/security_shinhan.png',
+      'assets/images/security_kyobo.png',
+      'assets/images/security_daol.png',
+      'assets/images/security_daishin.png',
+      'assets/images/security_mirae_asset.png',
+      'assets/images/security_samsung.png',
+      'assets/images/security_sangsangin.png',
+      'assets/images/security_shinyoung.png',
+      'assets/images/security_yuanta.png',
+      'assets/images/security_kakao_pay.png',
+      'assets/images/security_cape.png',
+      'assets/images/security_kiwoom.png',
+      'assets/images/security_toss.png',
+      'assets/images/security_hana.png',
+      'assets/images/security_korea_investment.png',
+      'assets/images/security_hanwha.png',
+      'assets/images/security_hyundai_motor.png',
+      'assets/images/security_db_financial.png',
+    ]);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/8_2_securities_selector.png'),
+    );
+    await tester.tap(find.byKey(const Key('bank-tab-은행')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('bank-신한')));
     await tester.pumpAndSettle();

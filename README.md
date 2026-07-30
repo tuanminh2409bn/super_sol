@@ -17,6 +17,18 @@ the original 589×1280 design canvas and scaled proportionally at runtime.
 - Tap the profile name/badge for account actions.
 - Email/password registration, sign-in, and sign-out with Firebase
   Authentication.
+- Account management: add, edit, archive, rename displayed bank/owner/account,
+  change account type, and set the exact displayed balance.
+- Transaction management: add, edit, delete, duplicate, drag to reorder, and
+  edit timestamps down to the second.
+- Balances are derived from opening balance plus the signed transaction ledger;
+  transaction running balances are recalculated chronologically.
+- Recipient management: add, edit, delete, select a bank, and keep the matching
+  bank logo.
+- Successful transfers create real expense ledger entries. Transfers between
+  two managed accounts update both accounts in one store operation.
+- Data is persisted per authenticated user locally and synchronized with Cloud
+  Firestore when Firebase is available.
 
 The PIN keypad accepts the six digits shown in any order for this prototype.
 The account sheet is also available through `로그인 방법 다시 선택` on the
@@ -34,6 +46,13 @@ Native Firebase files are already installed:
 
 - `android/app/google-services.json`
 - `ios/Runner/GoogleService-Info.plist`
+
+Firestore rules live in `firestore.rules`. Deploy them from an authenticated
+Firebase CLI before production distribution:
+
+```sh
+firebase deploy --only firestore:rules
+```
 
 The Firebase project is on the paid plan. These Authentication providers were
 verified through the Firebase API on 2026-07-24:

@@ -39,6 +39,16 @@ class AuthService {
 
   bool get isSignedIn => currentEmail != null;
 
+  String? get firebaseUserId =>
+      _firebaseReady ? FirebaseAuth.instance.currentUser?.uid : null;
+
+  String get dataScope {
+    if (_firebaseReady) {
+      return FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    }
+    return currentEmail ?? 'guest';
+  }
+
   Future<void> initialize() async {
     _preferences = await SharedPreferences.getInstance();
     try {

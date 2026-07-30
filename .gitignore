@@ -55,3 +55,8 @@ app.*.map.json
 
 # Generated only when a golden comparison fails; baseline images live in test/goldens.
 /test/failures/
+
+# Local design sources and distributable builds are kept outside source control.
+/bank_icons/
+/mockup/
+/dist/

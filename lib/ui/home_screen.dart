@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_data.dart';
 import '../core/auth_service.dart';
+import '../core/data_bootstrap.dart';
 import 'account_details_screen.dart';
 import 'auth_sheet.dart';
+import 'bank_logo.dart';
 import 'design_canvas.dart';
 import 'pin_screen.dart';
 import 'transfer_recipient_screen.dart';
@@ -13,13 +16,15 @@ const _muted = Color(0xFF555D69);
 const _blue = Color(0xFF075FF7);
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
+  HomeScreen({
     super.key,
     required this.auth,
     this.initialScrollOffset = 0,
-  });
+    AppDataStore? dataStore,
+  }) : dataStore = dataStore ?? AppDataStore.shared;
 
   final AuthService auth;
+  final AppDataStore dataStore;
   final double initialScrollOffset;
 
   @override
@@ -38,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _homeScroll = ScrollController(
       initialScrollOffset: widget.initialScrollOffset,
     );
+    widget.dataStore.addListener(_handleDataChange);
     _homeScroll.addListener(() {
       final offset = _homeScroll.offset;
       if ((offset - _scrollOffset).abs() > 2 && mounted) {
@@ -48,8 +54,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    widget.dataStore.removeListener(_handleDataChange);
     _homeScroll.dispose();
     super.dispose();
+  }
+
+  void _handleDataChange() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _scrollToContinuation() async {
@@ -65,7 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openAccountDetails() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => AccountDetailsScreen(auth: widget.auth),
+        builder: (_) => AccountDetailsScreen(
+          auth: widget.auth,
+          dataStore: widget.dataStore,
+          accountId: widget.dataStore.accounts.firstOrNull?.id,
+        ),
       ),
     );
     if (mounted) {
@@ -131,7 +146,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (!mounted) return;
     if (action == 'login') {
-      await showAuthSheet(context, auth: widget.auth);
+      final authenticated = await showAuthSheet(context, auth: widget.auth);
+      if (authenticated) {
+        await initializeUserData(widget.auth, store: widget.dataStore);
+      }
       if (mounted) setState(() {});
     } else if (action == 'logout') {
       await _logout();
@@ -140,7 +158,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openTransferRecipient() async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const TransferRecipientScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => TransferRecipientScreen(dataStore: widget.dataStore),
+      ),
     );
     if (mounted) {
       showDeviceStatusBar(darkIcons: true, backgroundColor: _homeBackground);
@@ -149,6 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _logout() async {
     await widget.auth.signOut();
+    await initializeUserData(widget.auth, store: widget.dataStore);
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => PinScreen(auth: widget.auth)),
@@ -162,6 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final accountLabel = widget.auth.isSignedIn
         ? designDisplayName
         : 'ĐĂNG NHẬP';
+    final primaryAccount = widget.dataStore.accounts.firstOrNull;
     final mediaQuery = MediaQuery.of(context);
     final occupiedBottomInset = mediaQuery.viewPadding.bottom;
     final canvasScale = mediaQuery.size.width / mockupWidth;
@@ -185,6 +207,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _AssetHomeContent(
                       accountName: accountLabel,
+                      account: primaryAccount,
+                      balance: primaryAccount == null
+                          ? 0
+                          : widget.dataStore.balanceFor(primaryAccount.id),
                       onOpenDetails: _openAccountDetails,
                       onTransfer: _openTransferRecipient,
                     ),
@@ -260,11 +286,15 @@ class _HomeScreenState extends State<HomeScreen> {
 class _AssetHomeContent extends StatelessWidget {
   const _AssetHomeContent({
     required this.accountName,
+    required this.account,
+    required this.balance,
     required this.onOpenDetails,
     required this.onTransfer,
   });
 
   final String accountName;
+  final BankAccount? account;
+  final int balance;
   final VoidCallback onOpenDetails;
   final VoidCallback onTransfer;
 
@@ -306,22 +336,21 @@ class _AssetHomeContent extends StatelessWidget {
                       color: Color(0xFF818793),
                     ),
                   ),
-                  const Positioned(
+                  Positioned(
                     left: 20,
                     top: 86,
                     width: 58,
                     height: 58,
-                    child: Image(
-                      image: AssetImage('assets/images/shinhan_logo.png'),
-                      fit: BoxFit.fill,
-                    ),
+                    child: account == null
+                        ? const Icon(Icons.account_balance_rounded)
+                        : BankLogo(bankCode: account!.bankCode, size: 58),
                   ),
-                  const Positioned(
+                  Positioned(
                     left: 75,
                     top: 82,
                     child: Text(
-                      '[금융거래한도계좌2]저축예금',
-                      style: TextStyle(
+                      account?.accountType ?? '등록된 계좌가 없습니다',
+                      style: const TextStyle(
                         fontSize: 18,
                         color: Color(0xFF505762),
                         fontWeight: FontWeight.w500,
@@ -329,12 +358,12 @@ class _AssetHomeContent extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Positioned(
+                  Positioned(
                     left: 75,
                     top: 113,
                     child: Text(
-                      '388,489원',
-                      style: TextStyle(
+                      '${_formatHomeMoney(balance)}원',
+                      style: const TextStyle(
                         fontSize: 27,
                         height: 1,
                         color: Color(0xFF222731),
@@ -487,7 +516,7 @@ class _AssetHomeContent extends StatelessWidget {
                 ),
                 const Positioned(
                   left: 25,
-                  top: 89,
+                  top: 91,
                   width: 58,
                   height: 39,
                   child: Image(
@@ -497,7 +526,7 @@ class _AssetHomeContent extends StatelessWidget {
                 ),
                 const Positioned(
                   left: 85,
-                  top: 62,
+                  top: 77,
                   child: Text(
                     '할인 쿠폰 드려요',
                     style: TextStyle(
@@ -509,7 +538,7 @@ class _AssetHomeContent extends StatelessWidget {
                 ),
                 const Positioned(
                   left: 85,
-                  top: 92,
+                  top: 107,
                   child: Text(
                     'bhc치킨 최대 9,000원',
                     style: TextStyle(
@@ -522,9 +551,9 @@ class _AssetHomeContent extends StatelessWidget {
                 ),
                 Positioned(
                   right: 20,
-                  top: 93,
+                  top: 94,
                   width: 99,
-                  height: 46,
+                  height: 43,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0F3FF),
@@ -937,9 +966,9 @@ class _Header extends StatelessWidget {
           ),
           Positioned(
             left: 38,
-            top: 0,
-            width: 285,
-            height: 36,
+            top: 3,
+            width: 350,
+            height: 38,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onAccountTap,
@@ -949,10 +978,10 @@ class _Header extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 20.5,
+                  fontSize: 23,
                   color: Color(0xFF11141B),
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -1.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -.3,
                 ),
               ),
             ),
@@ -1323,4 +1352,9 @@ const _footerText = TextStyle(
   color: Color(0xFF313641),
   fontSize: 18,
   fontWeight: FontWeight.w600,
+);
+
+String _formatHomeMoney(int value) => value.toString().replaceAllMapped(
+  RegExp(r'(?<!^)(?=(\d{3})+$)'),
+  (_) => ',',
 );

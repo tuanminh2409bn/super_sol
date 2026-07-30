@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'core/auth_service.dart';
+import 'core/data_bootstrap.dart';
 import 'ui/design_canvas.dart';
 import 'ui/splash_screen.dart';
 
@@ -14,6 +15,7 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   final auth = AuthService();
   await auth.initialize();
+  await initializeUserData(auth);
   runApp(SuperSolApp(auth: auth));
 }
 

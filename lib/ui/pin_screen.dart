@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/auth_service.dart';
+import '../core/data_bootstrap.dart';
 import 'auth_sheet.dart';
 import 'design_canvas.dart';
 import 'home_screen.dart';
@@ -72,6 +73,7 @@ class _PinScreenState extends State<PinScreen> {
   Future<void> _chooseLoginMethod() async {
     final authenticated = await showAuthSheet(context, auth: widget.auth);
     if (authenticated && mounted) {
+      await initializeUserData(widget.auth);
       _openHome();
     }
   }
