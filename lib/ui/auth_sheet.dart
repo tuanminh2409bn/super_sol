@@ -27,6 +27,7 @@ class _AuthSheet extends StatefulWidget {
 }
 
 class _AuthSheetState extends State<_AuthSheet> {
+  final _displayNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   late AuthMode _mode = widget.initialMode;
@@ -35,6 +36,7 @@ class _AuthSheetState extends State<_AuthSheet> {
 
   @override
   void dispose() {
+    _displayNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -50,6 +52,9 @@ class _AuthSheetState extends State<_AuthSheet> {
       mode: _mode,
       email: _emailController.text,
       password: _passwordController.text,
+      displayName: _mode == AuthMode.register
+          ? _displayNameController.text
+          : null,
     );
     if (!mounted) return;
     if (result.ok) {
@@ -108,6 +113,21 @@ class _AuthSheetState extends State<_AuthSheet> {
               ),
             ),
             const SizedBox(height: 20),
+            if (_mode == AuthMode.register) ...[
+              TextField(
+                key: const Key('register-display-name'),
+                controller: _displayNameController,
+                textCapitalization: TextCapitalization.words,
+                autocorrect: false,
+                autofillHints: const [AutofillHints.name],
+                decoration: const InputDecoration(
+                  labelText: 'Tên tài khoản hiển thị',
+                  hintText: 'Ví dụ: TRINH TRUN',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,

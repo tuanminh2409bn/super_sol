@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:super_sol/core/app_data.dart';
@@ -71,6 +73,22 @@ void main() {
       expect(store.balanceFor(accountId), 500000);
       expect(store.transactionsFor(accountId), hasLength(7));
     });
+
+    test(
+      'editing displayed balance remains exact after income history',
+      () async {
+        final account = store.accountById(accountId)!;
+        await store.createTransaction(
+          accountId: accountId,
+          title: '추가 입금',
+          signedAmount: 100000,
+          occurredAt: DateTime(2026, 7, 30, 1, 2, 3),
+          channel: '모바일',
+        );
+        await store.saveAccountWithCurrentBalance(account, 50000);
+        expect(store.balanceFor(accountId), 50000);
+      },
+    );
 
     test('internal transfer updates both accounts in one operation', () async {
       final destination = await store.createAccount(
@@ -196,53 +214,223 @@ void main() {
       await store.archiveAccount(account.id);
       expect(store.accounts.where((item) => item.id == account.id), isEmpty);
     });
+
+    test(
+      'account and recipient numbers are validated and cannot duplicate',
+      () async {
+        final store = AppDataStore.inMemory(withMockData: false);
+        await expectLater(
+          store.createAccount(
+            bankCode: '신한',
+            bankDisplayName: '신한',
+            ownerName: 'OWNER',
+            accountNumber: '12',
+            accountType: '입출금',
+            openingBalance: 0,
+          ),
+          throwsArgumentError,
+        );
+        await expectLater(
+          store.createAccount(
+            bankCode: '신한',
+            bankDisplayName: '신한',
+            ownerName: 'OWNER',
+            accountNumber: '110-123-456',
+            accountType: '입출금',
+            openingBalance: -1,
+          ),
+          throwsArgumentError,
+        );
+
+        await store.createRecipient(
+          displayName: 'FIRST',
+          bankCode: '우리',
+          accountNumber: '100-200-300',
+        );
+        await expectLater(
+          store.createRecipient(
+            displayName: 'DUPLICATE',
+            bankCode: '우리',
+            accountNumber: '100200300',
+          ),
+          throwsStateError,
+        );
+      },
+    );
+
+    test('manual expense cannot reduce an account below zero', () async {
+      final store = AppDataStore.inMemory(withMockData: false);
+      final account = await store.createAccount(
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'OWNER',
+        accountNumber: '110-123-456',
+        accountType: '입출금',
+        openingBalance: 100,
+      );
+      await expectLater(
+        store.createTransaction(
+          accountId: account.id,
+          title: 'TOO LARGE',
+          signedAmount: -101,
+          occurredAt: DateTime(2026, 8, 1),
+          channel: '모바일',
+        ),
+        throwsStateError,
+      );
+      expect(store.balanceFor(account.id), 100);
+      expect(store.transactionsFor(account.id), isEmpty);
+    });
   });
 
-  test('data persists per user scope and reloads without reseeding', () async {
-    SharedPreferences.setMockInitialValues({});
-    final first = AppDataStore();
-    await first.initialize('user-a');
-    final accountId = first.accounts.first.id;
-    await first.createTransaction(
-      accountId: accountId,
-      title: '영구 저장',
-      signedAmount: 777,
-      occurredAt: DateTime(2026, 7, 29, 12, 34, 56),
-      channel: '모바일',
-    );
-    final expectedBalance = first.balanceFor(accountId);
+  test('recent recipients can save up to fifty entries', () async {
+    final store = AppDataStore.inMemory(withMockData: false);
+    for (var index = 0; index < AppDataStore.maxSavedRecipients; index++) {
+      await store.createRecipient(
+        displayName: 'Recipient $index',
+        bankCode: '신한',
+        accountNumber: '110000000$index',
+      );
+    }
 
-    final reloaded = AppDataStore();
-    await reloaded.initialize('user-a');
-    expect(reloaded.balanceFor(accountId), expectedBalance);
-    expect(
-      reloaded
-          .transactionsFor(accountId)
-          .where((item) => item.title == '영구 저장'),
-      hasLength(1),
-    );
-
-    final otherUser = AppDataStore();
-    await otherUser.initialize('user-b');
-    expect(
-      otherUser
-          .transactionsFor(otherUser.accounts.first.id)
-          .where((item) => item.title == '영구 저장'),
-      isEmpty,
+    expect(store.recipients, hasLength(AppDataStore.maxSavedRecipients));
+    await expectLater(
+      store.createRecipient(
+        displayName: 'One too many',
+        bankCode: '신한',
+        accountNumber: '1100000050',
+      ),
+      throwsStateError,
     );
   });
 
-  test('corrupted local data recovers to a valid seed state', () async {
+  test(
+    'a new user scope starts with no mockup data and persists additions',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppDataStore();
+      await first.initialize('user-a');
+      expect(first.accounts, isEmpty);
+      expect(first.recipients, isEmpty);
+
+      final account = await first.createAccount(
+        bankCode: '신한',
+        bankDisplayName: '나의 신한 계좌',
+        ownerName: 'NEW USER',
+        accountNumber: '110-000-000000',
+        accountType: '입출금',
+        openingBalance: 100000,
+      );
+      await first.createTransaction(
+        accountId: account.id,
+        title: '영구 저장',
+        signedAmount: 777,
+        occurredAt: DateTime(2026, 7, 29, 12, 34, 56),
+        channel: '모바일',
+      );
+      final expectedBalance = first.balanceFor(account.id);
+
+      final reloaded = AppDataStore();
+      await reloaded.initialize('user-a');
+      expect(reloaded.balanceFor(account.id), expectedBalance);
+      expect(
+        reloaded
+            .transactionsFor(account.id)
+            .where((item) => item.title == '영구 저장'),
+        hasLength(1),
+      );
+
+      final otherUser = AppDataStore();
+      await otherUser.initialize('user-b');
+      expect(otherUser.accounts, isEmpty);
+      expect(otherUser.transactionsFor(account.id), isEmpty);
+      expect(otherUser.recipients, isEmpty);
+    },
+  );
+
+  test('corrupted local data recovers to an empty valid state', () async {
     SharedPreferences.setMockInitialValues({
-      'super_sol_app_data_v1-Z3Vlc3Q=': '{not-valid-json',
+      'super_sol_app_data_v2-Z3Vlc3Q=': '{not-valid-json',
     });
     final store = AppDataStore();
 
     await store.initialize('guest');
 
-    expect(store.accounts, isNotEmpty);
-    expect(store.balanceFor(store.accounts.first.id), 388489);
-    expect(store.transactionsFor(store.accounts.first.id), hasLength(7));
-    expect(store.recipients, hasLength(8));
+    expect(store.accounts, isEmpty);
+    expect(store.recipients, isEmpty);
   });
+
+  test(
+    'legacy mockup data is removed without deleting user-created rows',
+    () async {
+      const scope = 'existing-user';
+      final key =
+          'super_sol_app_data_v1-${base64Url.encode(utf8.encode(scope))}';
+      SharedPreferences.setMockInitialValues({
+        key: jsonEncode({
+          'schemaVersion': 1,
+          'updatedAtMicros': 1,
+          'idSequence': 3,
+          'accounts': [
+            {
+              'id': 'default-account',
+              'bankCode': '신한',
+              'bankDisplayName': '신한',
+              'ownerName': 'MOCK',
+              'accountNumber': '110-628-103680',
+              'accountType': '저축예금',
+              'openingBalance': 560289,
+              'createdAt': '2026-07-20T00:00:00.000Z',
+              'archived': false,
+            },
+            {
+              'id': 'user-account',
+              'bankCode': '우리',
+              'bankDisplayName': '내 우리 계좌',
+              'ownerName': 'REAL USER',
+              'accountNumber': '100-200-300',
+              'accountType': '입출금',
+              'openingBalance': 250000,
+              'createdAt': '2026-07-25T00:00:00.000Z',
+              'archived': false,
+            },
+          ],
+          'transactions': [
+            {
+              'id': 'seed-transaction-0',
+              'accountId': 'default-account',
+              'title': 'MOCK',
+              'signedAmount': -1000,
+              'occurredAt': '2026-07-22T00:00:00.000Z',
+              'channel': '모바일',
+              'displayOrder': 0,
+            },
+          ],
+          'recipients': [
+            {
+              'id': 'seed-recipient-0',
+              'displayName': 'MOCK',
+              'bankCode': '신한',
+              'accountNumber': '1',
+              'favorite': false,
+            },
+            {
+              'id': 'user-recipient',
+              'displayName': 'NGƯỜI NHẬN THẬT',
+              'bankCode': '우리',
+              'accountNumber': '200300400',
+              'favorite': false,
+            },
+          ],
+        }),
+      });
+
+      final store = AppDataStore();
+      await store.initialize(scope);
+
+      expect(store.accounts.map((item) => item.id), ['user-account']);
+      expect(store.transactionsFor('user-account'), isEmpty);
+      expect(store.recipients.map((item) => item.id), ['user-recipient']);
+    },
+  );
 }

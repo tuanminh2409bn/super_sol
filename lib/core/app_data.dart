@@ -189,19 +189,39 @@ class AppDataStore extends ChangeNotifier {
 
   static final AppDataStore shared = AppDataStore.inMemory();
 
-  AppDataStore.inMemory() {
-    _seed();
+  /// Mock data is available only for isolated visual/widget tests. The live
+  /// shared store is always initialized from an empty user scope.
+  AppDataStore.inMemory({bool withMockData = true}) {
+    if (withMockData) _addMockData();
     _initialized = true;
   }
 
-  static const schemaVersion = 1;
+  // Version 2 deliberately starts every user with a clean ledger instead of
+  // carrying the old mockup accounts, transactions, and recipients forward.
+  static const schemaVersion = 2;
+
+  /// The transfer screen mirrors the banking app's recent-recipient limit.
+  /// Keeping the limit in the data layer prevents a user from saving entries
+  /// that the screen can no longer show or select.
+  static const maxSavedRecipients = 50;
+
+  /// Keeps matching and duplicate detection consistent everywhere account
+  /// numbers are entered. Display formatting (for example hyphens) remains
+  /// untouched; only comparisons use digits.
+  static String normalizedAccountNumber(String value) =>
+      value.replaceAll(RegExp(r'[^0-9]'), '');
+
+  static bool isValidAccountNumber(String value) {
+    final digits = normalizedAccountNumber(value);
+    return digits.length >= 3 && digits.length <= 30;
+  }
 
   SharedPreferences? _preferences;
   String? _storageKey;
   bool _initialized = false;
   int _idSequence = 0;
   int _updatedAtMicros = 0;
-  bool _localWasSeeded = false;
+  bool _localIsFresh = false;
   DocumentReference<Map<String, dynamic>>? _remoteDocument;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
   _remoteSubscription;
@@ -222,25 +242,31 @@ class AppDataStore extends ChangeNotifier {
     _preferences = await SharedPreferences.getInstance();
     _storageKey = _keyFor(userScope);
     final raw = _preferences!.getString(_storageKey!);
+    final legacyRaw = raw == null
+        ? _preferences!.getString(_keyForVersion(userScope, schemaVersion - 1))
+        : null;
+    final shouldMigrateLegacyData = legacyRaw != null;
     _accounts.clear();
     _transactions.clear();
     _recipients.clear();
-    if (raw == null) {
-      _localWasSeeded = true;
-      _seed();
+    if (raw == null && legacyRaw == null) {
+      _localIsFresh = true;
       await _persist();
     } else {
       try {
-        _localWasSeeded = false;
-        _decode(raw);
+        _localIsFresh = false;
+        _decode(raw ?? legacyRaw!);
+        if (shouldMigrateLegacyData) {
+          _removeMockupRecords();
+          await _persist();
+        }
       } catch (_) {
         // Recover from a partial/corrupted local write instead of preventing
         // the user from opening the app.
         _accounts.clear();
         _transactions.clear();
         _recipients.clear();
-        _localWasSeeded = true;
-        _seed();
+        _localIsFresh = true;
         await _persist();
       }
     }
@@ -264,16 +290,29 @@ class AppDataStore extends ChangeNotifier {
           .get(const GetOptions(source: Source.serverAndCache))
           .timeout(const Duration(seconds: 8));
       final data = remote.data();
+      final remoteSchemaVersion =
+          (data?['schemaVersion'] as num?)?.toInt() ?? 0;
       final remoteUpdatedAt = (data?['updatedAtMicros'] as num?)?.toInt() ?? 0;
-      if (data != null &&
-          (_localWasSeeded || remoteUpdatedAt > _updatedAtMicros)) {
+      if (data != null && remoteSchemaVersion < schemaVersion) {
+        // Existing version-1 documents can contain a mix of old mockup rows
+        // and user-created rows. Retain the latter while deleting only the
+        // records that belong to the mockup, then upgrade the remote schema.
         _decodeMap(Map<String, Object?>.from(data));
-        _localWasSeeded = false;
+        _removeMockupRecords();
+        _localIsFresh = false;
+        await _persistLocal();
+        await document.set(_snapshot());
+        notifyListeners();
+      } else if (data != null &&
+          remoteSchemaVersion >= schemaVersion &&
+          (_localIsFresh || remoteUpdatedAt > _updatedAtMicros)) {
+        _decodeMap(Map<String, Object?>.from(data));
+        _localIsFresh = false;
         await _persistLocal();
         notifyListeners();
       } else {
         await document.set(_snapshot());
-        _localWasSeeded = false;
+        _localIsFresh = false;
       }
     } catch (_) {
       // SharedPreferences remains the immediate offline source. Firestore will
@@ -282,6 +321,8 @@ class AppDataStore extends ChangeNotifier {
     _remoteSubscription = document.snapshots().listen((snapshot) async {
       final data = snapshot.data();
       if (data == null || snapshot.metadata.hasPendingWrites) return;
+      final remoteSchemaVersion = (data['schemaVersion'] as num?)?.toInt() ?? 0;
+      if (remoteSchemaVersion < schemaVersion) return;
       final remoteUpdatedAt = (data['updatedAtMicros'] as num?)?.toInt() ?? 0;
       if (remoteUpdatedAt <= _updatedAtMicros) return;
       try {
@@ -353,13 +394,16 @@ class AppDataStore extends ChangeNotifier {
         account.accountType.trim().isEmpty) {
       throw ArgumentError('Thông tin tài khoản không được để trống.');
     }
+    if (!isValidAccountNumber(account.accountNumber)) {
+      throw ArgumentError('Số tài khoản phải có từ 3 đến 30 chữ số.');
+    }
     final duplicate = _accounts.any(
       (item) =>
           item.id != account.id &&
           !item.archived &&
           item.bankCode == account.bankCode &&
-          item.accountNumber.replaceAll(RegExp(r'\D'), '') ==
-              account.accountNumber.replaceAll(RegExp(r'\D'), ''),
+          normalizedAccountNumber(item.accountNumber) ==
+              normalizedAccountNumber(account.accountNumber),
     );
     if (duplicate) {
       throw StateError('Tài khoản này đã tồn tại.');
@@ -381,7 +425,10 @@ class AppDataStore extends ChangeNotifier {
     required String accountNumber,
     required String accountType,
     required int openingBalance,
-  }) {
+  }) async {
+    if (openingBalance < 0) {
+      throw ArgumentError('Số dư không được âm.');
+    }
     return saveAccount(
       BankAccount(
         id: _newId('account'),
@@ -400,6 +447,9 @@ class AppDataStore extends ChangeNotifier {
     BankAccount account,
     int desiredBalance,
   ) {
+    if (desiredBalance < 0) {
+      throw ArgumentError('Số dư không được âm.');
+    }
     final existing = accountById(account.id);
     if (existing == null) {
       return saveAccount(account.copyWith(openingBalance: desiredBalance));
@@ -428,6 +478,14 @@ class AppDataStore extends ChangeNotifier {
       throw ArgumentError('Tên và số tiền giao dịch phải hợp lệ.');
     }
     final index = _transactions.indexWhere((item) => item.id == transaction.id);
+    final existing = index == -1 ? null : _transactions[index];
+    final projectedBalance =
+        balanceFor(transaction.accountId) -
+        (existing?.signedAmount ?? 0) +
+        transaction.signedAmount;
+    if (projectedBalance < 0) {
+      throw StateError('Số dư khả dụng không đủ.');
+    }
     if (index == -1) {
       _transactions.add(transaction);
     } else {
@@ -443,7 +501,21 @@ class AppDataStore extends ChangeNotifier {
     required int signedAmount,
     required DateTime occurredAt,
     required String channel,
-  }) {
+  }) async {
+    _requireInitialized();
+    if (channel.trim().isEmpty) {
+      throw ArgumentError('Phương thức giao dịch không được để trống.');
+    }
+    final account = accountById(accountId);
+    if (account == null || account.archived) {
+      throw StateError('Không tìm thấy tài khoản của giao dịch.');
+    }
+    if (title.trim().isEmpty || signedAmount == 0) {
+      throw ArgumentError('Tên và số tiền giao dịch phải hợp lệ.');
+    }
+    if (balanceFor(accountId) + signedAmount < 0) {
+      throw StateError('Số dư khả dụng không đủ.');
+    }
     final existing = transactionsFor(accountId);
     for (var i = 0; i < existing.length; i++) {
       final index = _transactions.indexWhere(
@@ -576,8 +648,26 @@ class AppDataStore extends ChangeNotifier {
         recipient.accountNumber.trim().isEmpty) {
       throw ArgumentError('Thông tin người nhận không được để trống.');
     }
+    if (!isValidAccountNumber(recipient.accountNumber)) {
+      throw ArgumentError('Số tài khoản phải có từ 3 đến 30 chữ số.');
+    }
     final index = _recipients.indexWhere((item) => item.id == recipient.id);
+    final duplicate = _recipients.any(
+      (item) =>
+          item.id != recipient.id &&
+          item.bankCode == recipient.bankCode &&
+          normalizedAccountNumber(item.accountNumber) ==
+              normalizedAccountNumber(recipient.accountNumber),
+    );
+    if (duplicate) {
+      throw StateError('Người nhận với tài khoản này đã tồn tại.');
+    }
     if (index == -1) {
+      if (_recipients.length >= maxSavedRecipients) {
+        throw StateError(
+          'Bạn chỉ có thể lưu tối đa $maxSavedRecipients người nhận gần đây.',
+        );
+      }
       _recipients.add(recipient);
     } else {
       _recipients[index] = recipient;
@@ -709,7 +799,7 @@ class AppDataStore extends ChangeNotifier {
     'recipients': _recipients.map((item) => item.toJson()).toList(),
   };
 
-  void _seed() {
+  void _addMockData() {
     const accountId = 'default-account';
     _accounts.add(
       BankAccount(
@@ -769,13 +859,28 @@ class AppDataStore extends ChangeNotifier {
     }
   }
 
+  void _removeMockupRecords() {
+    const mockAccountId = 'default-account';
+    _accounts.removeWhere((account) => account.id == mockAccountId);
+    _transactions.removeWhere(
+      (transaction) =>
+          transaction.accountId == mockAccountId ||
+          transaction.id.startsWith('seed-transaction-'),
+    );
+    _recipients.removeWhere(
+      (recipient) => recipient.id.startsWith('seed-recipient-'),
+    );
+  }
+
   String _newId(String prefix) {
     _idSequence += 1;
     return '$prefix-${DateTime.now().microsecondsSinceEpoch}-$_idSequence';
   }
 
-  String _keyFor(String scope) =>
-      'super_sol_app_data_v$schemaVersion-${base64Url.encode(utf8.encode(scope))}';
+  String _keyFor(String scope) => _keyForVersion(scope, schemaVersion);
+
+  String _keyForVersion(String scope, int version) =>
+      'super_sol_app_data_v$version-${base64Url.encode(utf8.encode(scope))}';
 
   void _requireInitialized() {
     if (!_initialized) {

@@ -121,7 +121,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final accountLabel = widget.auth.isSignedIn
-        ? designDisplayName
+        ? widget.auth.displayName
         : 'TÀI KHOẢN';
     final account = _selectedAccount;
     final transactions = account == null

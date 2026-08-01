@@ -5,8 +5,6 @@ import 'package:flutter/services.dart';
 
 const double mockupWidth = 589;
 const double mockupHeight = 1280;
-const String designDisplayName = 'TRINHTRUNGMINH';
-
 Future<void> showDeviceStatusBar({
   required bool darkIcons,
   required Color backgroundColor,

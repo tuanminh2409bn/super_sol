@@ -139,12 +139,75 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('registration requires and sends the display name', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final auth = _RegisteringAuthService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => GestureDetector(
+            key: const Key('open-register-auth'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => showAuthSheet(context, auth: auth),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('open-register-auth')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chưa có tài khoản? Đăng ký'));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('register-display-name')),
+      'TÊN TÀI KHOẢN MỚI',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'new@example.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Mật khẩu'),
+      '123456',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Đăng ký'));
+    await tester.pumpAndSettle();
+
+    expect(auth.registeredDisplayName, 'TÊN TÀI KHOẢN MỚI');
+  });
+
+  testWidgets('a new account home is empty and uses its registered name', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    SharedPreferences.setMockInitialValues({});
+    final store = AppDataStore();
+    await store.initialize('brand-new-user');
+    final auth = _SignedInAuthService(name: 'TÊN TÀI KHOẢN MỚI');
+
+    await tester.pumpWidget(
+      _TestHost(
+        home: HomeScreen(auth: auth, dataStore: store),
+      ),
+    );
+
+    expect(find.text('TÊN TÀI KHOẢN MỚI님'), findsOneWidget);
+    expect(find.text('등록된 계좌가 없습니다'), findsOneWidget);
+    expect(find.text('0원'), findsNWidgets(2));
+    expect(
+      find.text('TÊN TÀI KHOẢN MỚI님의 금융생활, 슈퍼SOL이 함께합니다.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('the logout button at the end of Home signs out', (tester) async {
     _configureMockupViewport(tester);
     SharedPreferences.setMockInitialValues({});
     final auth = _SignedInAuthService();
-    final store = AppDataStore();
-    await store.initialize(auth.dataScope);
+    final store = AppDataStore.inMemory(withMockData: true);
     final signedInAccountId = store.accounts.first.id;
     await store.createTransaction(
       accountId: signedInAccountId,
@@ -169,12 +232,7 @@ void main() {
 
     expect(auth.signedOut, isTrue);
     expect(find.byType(PinScreen), findsOneWidget);
-    expect(
-      store
-          .transactionsFor(store.accounts.first.id)
-          .where((item) => item.title == 'SIGNED-IN-ONLY'),
-      isEmpty,
-    );
+    expect(store.accounts, isEmpty);
   });
 
   testWidgets('a hidden gesture area does not lift the bottom menu', (
@@ -389,10 +447,11 @@ void main() {
     expect(nextButton.top, greaterThan(lastKeyRow.bottom));
     await tester.tap(find.byKey(const Key('amount-key-1')));
     await tester.pump();
-    expect(find.text('1원'), findsNWidgets(2));
+    expect(find.text('1원'), findsOneWidget);
+    expect(find.byKey(const Key('amount-available-balance')), findsOneWidget);
     await tester.tap(find.byKey(const Key('amount-key-00')));
     await tester.pump();
-    expect(find.text('100원'), findsNWidgets(2));
+    expect(find.text('100원'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const Key('transfer-next')))
@@ -402,8 +461,6 @@ void main() {
 
     await tester.tap(find.byKey(const Key('transfer-next')));
     await tester.pumpAndSettle();
-    expect(find.text('EEF90723'), findsOneWidget);
-    expect(find.text('해당 계좌는 사고신고계좌로 거래가 불가합니다.'), findsOneWidget);
     expect(find.text('아래 계좌로\n100원 보낼까요?'), findsOneWidget);
     expect(find.text('수수료 무료'), findsOneWidget);
     expect(find.text('보내기'), findsOneWidget);
@@ -411,13 +468,37 @@ void main() {
       tester
           .widget<FilledButton>(find.byKey(const Key('transfer-next')))
           .onPressed,
-      isNull,
+      isNotNull,
     );
 
-    await tester.tap(find.byKey(const Key('transfer-error-confirm')));
+    await tester.tap(find.byKey(const Key('transfer-review-details-toggle')));
+    await tester.pump();
+    expect(find.text('보내는 계좌'), findsOneWidget);
+    expect(find.text('받는 계좌'), findsOneWidget);
+    expect(find.text('받는분 메모'), findsOneWidget);
+
+    final balanceBeforeFailure = AppDataStore.shared.balanceFor(
+      AppDataStore.shared.accounts.first.id,
+    );
+    await tester.tap(find.byKey(const Key('transfer-next')));
     await tester.pumpAndSettle();
-    expect(find.text('EEF90723'), findsNothing);
-    expect(find.text('누구에게 보낼까요?'), findsOneWidget);
+    expect(find.text('계좌 비밀번호'), findsOneWidget);
+    expect(find.byKey(const Key('transfer-pin-keypad')), findsOneWidget);
+    expect(find.text('재배열'), findsOneWidget);
+    expect(find.byKey(const Key('transfer-back')), findsNothing);
+
+    for (final digit in ['0', '1', '2', '3']) {
+      await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('전화금융사고 및 기타금융사고 등록고객은\n지급거래 불가합니다.'), findsOneWidget);
+    expect(find.text('확인'), findsOneWidget);
+    expect(
+      AppDataStore.shared.balanceFor(AppDataStore.shared.accounts.first.id),
+      balanceBeforeFailure - 100,
+    );
+    await tester.tap(find.byKey(const Key('transfer-failure-home-confirm')));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a selected securities logo follows the transfer flow', (
@@ -506,7 +587,8 @@ void main() {
           .favorite,
       isTrue,
     );
-    expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+    final favoriteStar = tester.widget<Icon>(find.byIcon(Icons.star_rounded));
+    expect(favoriteStar.color, const Color(0xFF0969F6));
 
     await tester.tap(find.byKey(const Key('transfer-recipient-search')));
     await tester.pumpAndSettle();
@@ -515,8 +597,49 @@ void main() {
     expect(find.byKey(const Key('recipient-search-Npay')), findsOneWidget);
     await tester.tap(find.byKey(const Key('recipient-search-Npay')));
     await tester.pumpAndSettle();
-    expect(find.text('Npay 계좌로'), findsOneWidget);
+    expect(find.text('Npay님 계좌로'), findsOneWidget);
     expect(find.textContaining('56020228505759'), findsOneWidget);
+  });
+
+  testWidgets('recent recipients show saved entries beyond the first eight', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    await store.createAccount(
+      bankCode: '신한',
+      bankDisplayName: '신한',
+      ownerName: 'TEST OWNER',
+      accountNumber: '110000000000',
+      accountType: '입출금',
+      openingBalance: 500000,
+    );
+    for (var index = 0; index < 12; index++) {
+      await store.createRecipient(
+        displayName: 'Saved recipient $index',
+        bankCode: '우리',
+        accountNumber: '100000000$index',
+      );
+    }
+
+    await tester.pumpWidget(
+      _TestHost(home: TransferRecipientScreen(dataStore: store)),
+    );
+    expect(
+      find.byKey(const Key('recipient-Saved recipient 0')),
+      findsOneWidget,
+    );
+
+    await tester.drag(
+      find.byKey(const Key('recent-recipient-list')),
+      const Offset(0, -700),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('recipient-Saved recipient 11')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('camera shortcut enters the manual account flow', (tester) async {
@@ -528,6 +651,113 @@ void main() {
     expect(find.byKey(const Key('account-key-1')), findsOneWidget);
     expect(find.byKey(const Key('transfer-bank-selector')), findsOneWidget);
   });
+
+  testWidgets(
+    'typing three account digits shows and selects saved suggestions',
+    (tester) async {
+      _configureMockupViewport(tester);
+      final store = AppDataStore.inMemory(withMockData: false);
+      await store.createAccount(
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TEST OWNER',
+        accountNumber: '110000000000',
+        accountType: '입출금',
+        openingBalance: 500000,
+      );
+      final recipient = await store.createRecipient(
+        displayName: 'SUGGESTED RECIPIENT',
+        bankCode: '우리',
+        accountNumber: '123456789012',
+      );
+
+      await tester.pumpWidget(
+        _TestHost(home: TransferRecipientScreen(dataStore: store)),
+      );
+      await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+      await tester.pump();
+      for (final digit in ['1', '2', '3']) {
+        await tester.tap(find.byKey(Key('account-key-$digit')));
+      }
+      await tester.pump();
+
+      expect(
+        find.byKey(const Key('transfer-account-suggestions')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(Key('transfer-account-suggestion-${recipient.id}')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('SUGGESTED RECIPIENT님 계좌로'), findsOneWidget);
+      expect(find.textContaining('123456789012'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'account suggestions include newly saved accounts and all matching recipients',
+    (tester) async {
+      _configureMockupViewport(tester);
+      final store = AppDataStore.inMemory(withMockData: false);
+      await store.createAccount(
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'SOURCE OWNER',
+        accountNumber: '110000000000',
+        accountType: '출금계좌',
+        openingBalance: 500000,
+      );
+      final ownAccount = await store.createAccount(
+        bankCode: '우리',
+        bankDisplayName: '우리',
+        ownerName: 'SECOND OWNER',
+        accountNumber: '123000000001',
+        accountType: '새로 추가한 계좌',
+        openingBalance: 300000,
+      );
+      final first = await store.createRecipient(
+        displayName: 'MATCH ONE',
+        bankCode: '국민',
+        accountNumber: '123000000002',
+      );
+      final second = await store.createRecipient(
+        displayName: 'MATCH TWO',
+        bankCode: '하나',
+        accountNumber: '123000000003',
+      );
+
+      await tester.pumpWidget(
+        _TestHost(home: TransferRecipientScreen(dataStore: store)),
+      );
+      await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+      await tester.pump();
+      for (final digit in ['1', '2', '3']) {
+        await tester.tap(find.byKey(Key('account-key-$digit')));
+      }
+      await tester.pump();
+
+      expect(
+        find.byKey(const Key('transfer-account-suggestion-123000000001')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('transfer-account-suggestion-${first.id}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('transfer-account-suggestion-${second.id}')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('transfer-account-suggestion-123000000001')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('새로 추가한 계좌 계좌로'), findsOneWidget);
+      expect(find.textContaining(ownAccount.accountNumber), findsOneWidget);
+    },
+  );
 
   testWidgets('data management adds accounts and recipients', (tester) async {
     final store = AppDataStore.inMemory();
@@ -679,11 +909,57 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('transfer-next')));
     await tester.pumpAndSettle();
+    expect(find.text('계좌 비밀번호'), findsOneWidget);
+    for (final digit in ['0', '1', '2', '3']) {
+      await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
+    }
+    await tester.pumpAndSettle();
 
     expect(store.balanceFor(accountId), before - 1);
-    expect(find.text('이체 완료'), findsOneWidget);
     expect(store.transactionsFor(accountId).first.title, 'TRINH TRUN');
   });
+
+  testWidgets(
+    'a completed manual transfer becomes a future account suggestion',
+    (tester) async {
+      _configureMockupViewport(tester);
+      final store = AppDataStore.inMemory();
+      await tester.pumpWidget(
+        _TestHost(home: TransferRecipientScreen(dataStore: store)),
+      );
+
+      await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+      await tester.pump();
+      for (final digit in '777000001234'.split('')) {
+        await tester.tap(find.byKey(Key('account-key-$digit')));
+      }
+      await tester.tap(find.byKey(const Key('transfer-bank-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('bank-우리')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('transfer-next')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('amount-key-1')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('transfer-next')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('transfer-next')));
+      await tester.pumpAndSettle();
+      for (final digit in ['0', '1', '2', '3']) {
+        await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
+      }
+      await tester.pumpAndSettle();
+
+      expect(
+        store.recipients.any(
+          (recipient) =>
+              recipient.bankCode == '우리' &&
+              recipient.accountNumber == '777000001234',
+        ),
+        isTrue,
+      );
+    },
+  );
 
   testWidgets('home and account management react to stored data', (
     tester,
@@ -759,16 +1035,38 @@ class _SuccessfulAuthService extends AuthService {
     required AuthMode mode,
     required String email,
     required String password,
+    String? displayName,
   }) async {
     return const AuthResult(ok: true, message: 'Thành công.');
   }
 }
 
+class _RegisteringAuthService extends AuthService {
+  String? registeredDisplayName;
+
+  @override
+  Future<AuthResult> authenticate({
+    required AuthMode mode,
+    required String email,
+    required String password,
+    String? displayName,
+  }) async {
+    registeredDisplayName = displayName;
+    return const AuthResult(ok: true, message: 'Thành công.');
+  }
+}
+
 class _SignedInAuthService extends AuthService {
+  _SignedInAuthService({this.name = 'TRINHTRUNGMINH'});
+
   bool signedOut = false;
+  final String name;
 
   @override
   String? get currentEmail => signedOut ? null : 'test@gmail.com';
+
+  @override
+  String get displayName => name;
 
   @override
   Future<void> signOut() async {

@@ -256,6 +256,9 @@ void main() {
 class _GoldenAuthService extends AuthService {
   @override
   String? get currentEmail => 'test@gmail.com';
+
+  @override
+  String get displayName => 'TRINHTRUNGMINH';
 }
 
 Future<void> _precache(WidgetTester tester, List<String> assets) async {

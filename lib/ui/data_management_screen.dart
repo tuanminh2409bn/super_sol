@@ -496,19 +496,44 @@ class _AccountEditorState extends State<_AccountEditor> {
                   });
                 },
               ),
-              _requiredField(_bankName, '표시 은행명'),
-              _requiredField(_owner, '예금주'),
-              _requiredField(_accountNumber, '표시 계좌번호'),
-              _requiredField(_accountType, '계좌 종류'),
+              _requiredField(
+                _bankName,
+                '표시 은행명',
+                fieldKey: const Key('account-bank-name'),
+              ),
+              _requiredField(
+                _owner,
+                '예금주',
+                fieldKey: const Key('account-owner'),
+              ),
+              _requiredField(
+                _accountNumber,
+                '표시 계좌번호',
+                fieldKey: const Key('account-number'),
+                keyboardType: TextInputType.number,
+                validator: (value) =>
+                    AppDataStore.isValidAccountNumber(value ?? '')
+                    ? null
+                    : '3~30자리 숫자로 입력해주세요.',
+              ),
+              _requiredField(
+                _accountType,
+                '계좌 종류',
+                fieldKey: const Key('account-type'),
+              ),
               TextFormField(
                 key: const Key('account-balance'),
                 controller: _balance,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: '표시 잔액'),
-                validator: (value) =>
-                    int.tryParse(value?.replaceAll(',', '') ?? '') == null
-                    ? '숫자로 입력해주세요.'
-                    : null,
+                validator: (value) {
+                  final balance = int.tryParse(
+                    value?.replaceAll(',', '') ?? '',
+                  );
+                  return balance == null || balance < 0
+                      ? '0 이상의 숫자로 입력해주세요.'
+                      : null;
+                },
               ),
             ],
           ),
@@ -790,7 +815,11 @@ class _RecipientEditorState extends State<_RecipientEditor> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _requiredField(_name, '표시 이름'),
+            _requiredField(
+              _name,
+              '표시 이름',
+              fieldKey: const Key('recipient-name'),
+            ),
             DropdownButtonFormField<String>(
               key: const Key('recipient-bank-code'),
               value: _bankCode,
@@ -803,7 +832,16 @@ class _RecipientEditorState extends State<_RecipientEditor> {
                 if (value != null) setState(() => _bankCode = value);
               },
             ),
-            _requiredField(_accountNumber, '계좌번호'),
+            _requiredField(
+              _accountNumber,
+              '계좌번호',
+              fieldKey: const Key('recipient-account-number'),
+              keyboardType: TextInputType.number,
+              validator: (value) =>
+                  AppDataStore.isValidAccountNumber(value ?? '')
+                  ? null
+                  : '3~30자리 숫자로 입력해주세요.',
+            ),
           ],
         ),
       ),
@@ -832,12 +870,21 @@ class _RecipientEditorState extends State<_RecipientEditor> {
   );
 }
 
-Widget _requiredField(TextEditingController controller, String label) {
+Widget _requiredField(
+  TextEditingController controller,
+  String label, {
+  Key? fieldKey,
+  TextInputType? keyboardType,
+  String? Function(String?)? validator,
+}) {
   return TextFormField(
+    key: fieldKey,
     controller: controller,
+    keyboardType: keyboardType,
     decoration: InputDecoration(labelText: label),
-    validator: (value) =>
-        value == null || value.trim().isEmpty ? '필수 항목입니다.' : null,
+    validator:
+        validator ??
+        (value) => value == null || value.trim().isEmpty ? '필수 항목입니다.' : null,
   );
 }
 

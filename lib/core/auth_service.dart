@@ -20,6 +20,7 @@ class AuthResult {
 class AuthService {
   static const _emailKey = 'super_sol_local_email';
   static const _passwordKey = 'super_sol_local_password_digest';
+  static const _displayNameKey = 'super_sol_local_display_name';
   static const _sessionKey = 'super_sol_local_session';
 
   SharedPreferences? _preferences;
@@ -38,6 +39,18 @@ class AuthService {
   }
 
   bool get isSignedIn => currentEmail != null;
+
+  /// The name supplied when the account was registered. It is intentionally
+  /// separate from the email address because this is the name shown in the UI.
+  String get displayName {
+    final firebaseName = _firebaseReady
+        ? FirebaseAuth.instance.currentUser?.displayName?.trim()
+        : null;
+    final localName = _preferences?.getString(_displayNameKey)?.trim();
+    final name = firebaseName?.isNotEmpty == true ? firebaseName : localName;
+    if (name != null && name.isNotEmpty) return name;
+    return currentEmail?.split('@').first.trim() ?? 'TÀI KHOẢN';
+  }
 
   String? get firebaseUserId =>
       _firebaseReady ? FirebaseAuth.instance.currentUser?.uid : null;
@@ -63,8 +76,10 @@ class AuthService {
     required AuthMode mode,
     required String email,
     required String password,
+    String? displayName,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
+    final normalizedDisplayName = displayName?.trim() ?? '';
     if (!normalizedEmail.contains('@')) {
       return const AuthResult(
         ok: false,
@@ -77,14 +92,22 @@ class AuthService {
         message: 'Mật khẩu cần có ít nhất 6 ký tự.',
       );
     }
+    if (mode == AuthMode.register && normalizedDisplayName.isEmpty) {
+      return const AuthResult(
+        ok: false,
+        message: 'Vui lòng nhập tên tài khoản hiển thị.',
+      );
+    }
 
     if (_firebaseReady) {
       try {
         if (mode == AuthMode.register) {
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-            email: normalizedEmail,
-            password: password,
-          );
+          final credential = await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(
+                email: normalizedEmail,
+                password: password,
+              );
+          await credential.user?.updateDisplayName(normalizedDisplayName);
         } else {
           await FirebaseAuth.instance.signInWithEmailAndPassword(
             email: normalizedEmail,
@@ -118,6 +141,7 @@ class AuthService {
     if (mode == AuthMode.register) {
       await preferences.setString(_emailKey, normalizedEmail);
       await preferences.setString(_passwordKey, _digest(password));
+      await preferences.setString(_displayNameKey, normalizedDisplayName);
       await preferences.setBool(_sessionKey, true);
       return const AuthResult(
         ok: true,

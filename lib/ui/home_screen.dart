@@ -124,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 8),
                 Text(
                   signedIn
-                      ? '$designDisplayName님으로 로그인되어 있습니다.'
+                      ? '${widget.auth.displayName}님으로 로그인되어 있습니다.'
                       : 'Bạn đang xem ứng dụng ở chế độ khách.',
                   style: const TextStyle(color: Color(0xFF6F7684)),
                 ),
@@ -181,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final collapsed = _scrollOffset >= 1000;
     final accountLabel = widget.auth.isSignedIn
-        ? designDisplayName
+        ? widget.auth.displayName
         : 'ĐĂNG NHẬP';
     final primaryAccount = widget.dataStore.accounts.firstOrNull;
     final mediaQuery = MediaQuery.of(context);
