@@ -180,11 +180,18 @@ void main() {
 
     await tester.tap(find.byKey(const Key('transfer-manual-entry')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('account-key-1')));
+    for (final digit in ['1', '0', '0', '2']) {
+      await tester.tap(find.byKey(Key('account-key-$digit')));
+    }
+    await _precache(tester, const ['assets/images/bank_woori_transparent.png']);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/10_account_suggestions.png'),
+    );
     await tester.tap(find.byKey(const Key('transfer-bank-selector')));
     await _precache(tester, const [
       'assets/images/bank_shinhan_transparent.png',
-      'assets/images/bank_jeju_transparent.png',
       'assets/images/bank_kb_transparent.png',
       'assets/images/bank_ibk_transparent.png',
       'assets/images/bank_nh_transparent.png',

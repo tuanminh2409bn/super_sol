@@ -7,8 +7,11 @@ class BankCatalogEntry {
 
 abstract final class BankCatalog {
   static const _logoScales = <String, double>{
-    '신한': .97,
-    '제주': 1.03,
+    // Shinhan and Jeju use the same clean emblem. Keep their rendered
+    // diameter aligned with the other banks instead of scaling either source
+    // independently.
+    '신한': .94,
+    '제주': .94,
     '국민': 1.41,
     '기업': 1.82,
     '농협': 1.85,
@@ -67,7 +70,7 @@ abstract final class BankCatalog {
 
   static const bankEntries = <BankCatalogEntry>[
     BankCatalogEntry(code: '신한', assetName: 'bank_shinhan_transparent.png'),
-    BankCatalogEntry(code: '제주', assetName: 'bank_jeju_transparent.png'),
+    BankCatalogEntry(code: '제주', assetName: 'bank_shinhan_transparent.png'),
     BankCatalogEntry(code: '국민', assetName: 'bank_kb_transparent.png'),
     BankCatalogEntry(code: '기업', assetName: 'bank_ibk_transparent.png'),
     BankCatalogEntry(code: '농협', assetName: 'bank_nh_transparent.png'),

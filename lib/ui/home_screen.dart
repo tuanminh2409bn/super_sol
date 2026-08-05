@@ -74,8 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openAccountDetails() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final result = await Navigator.of(context).push<TransferFlowResult>(
+      MaterialPageRoute<TransferFlowResult>(
         builder: (_) => AccountDetailsScreen(
           auth: widget.auth,
           dataStore: widget.dataStore,
@@ -85,6 +85,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (mounted) {
       showDeviceStatusBar(darkIcons: true, backgroundColor: _homeBackground);
+      if (result == TransferFlowResult.failed) {
+        await showTransferFailurePopup(context);
+      }
     }
   }
 
@@ -157,13 +160,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openTransferRecipient() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final result = await Navigator.of(context).push<TransferFlowResult>(
+      MaterialPageRoute<TransferFlowResult>(
         builder: (_) => TransferRecipientScreen(dataStore: widget.dataStore),
       ),
     );
     if (mounted) {
       showDeviceStatusBar(darkIcons: true, backgroundColor: _homeBackground);
+      if (result == TransferFlowResult.failed) {
+        await showTransferFailurePopup(context);
+      }
     }
   }
 
@@ -339,14 +345,17 @@ class _AssetHomeContent extends StatelessWidget {
                   Positioned(
                     left: 20,
                     top: 86,
-                    width: 58,
-                    height: 58,
+                    width: BankLogoSize.account,
+                    height: BankLogoSize.account,
                     child: account == null
                         ? const Icon(Icons.account_balance_rounded)
-                        : BankLogo(bankCode: account!.bankCode, size: 58),
+                        : BankLogo(
+                            bankCode: account!.bankCode,
+                            size: BankLogoSize.account,
+                          ),
                   ),
                   Positioned(
-                    left: 75,
+                    left: 80,
                     top: 82,
                     child: Text(
                       account?.accountType ?? '등록된 계좌가 없습니다',
@@ -359,7 +368,7 @@ class _AssetHomeContent extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    left: 75,
+                    left: 80,
                     top: 113,
                     child: Text(
                       '${_formatHomeMoney(balance)}원',

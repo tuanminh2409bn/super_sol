@@ -536,70 +536,6 @@ class AppDataStore extends ChangeNotifier {
     );
   }
 
-  Future<void> recordTransfer({
-    required String sourceAccountId,
-    String? destinationAccountId,
-    required String recipientTitle,
-    required int amount,
-    required DateTime occurredAt,
-  }) async {
-    _requireInitialized();
-    if (amount <= 0) {
-      throw ArgumentError.value(amount, 'amount', 'Số tiền phải lớn hơn 0.');
-    }
-    if (recipientTitle.trim().isEmpty) {
-      throw ArgumentError.value(
-        recipientTitle,
-        'recipientTitle',
-        'Tên người nhận không được để trống.',
-      );
-    }
-    final source = accountById(sourceAccountId);
-    if (source == null || source.archived) {
-      throw StateError('Không tìm thấy tài khoản nguồn.');
-    }
-    if (balanceFor(sourceAccountId) < amount) {
-      throw StateError('Số dư khả dụng không đủ.');
-    }
-    if (destinationAccountId == sourceAccountId) {
-      throw StateError('Tài khoản nhận phải khác tài khoản nguồn.');
-    }
-    BankAccount? destination;
-    if (destinationAccountId != null) {
-      destination = accountById(destinationAccountId);
-      if (destination == null || destination.archived) {
-        throw StateError('Không tìm thấy tài khoản nhận.');
-      }
-    }
-    _shiftTransactionOrder(sourceAccountId);
-    _transactions.add(
-      LedgerTransaction(
-        id: _newId('transaction'),
-        accountId: sourceAccountId,
-        title: recipientTitle,
-        signedAmount: -amount,
-        occurredAt: occurredAt,
-        channel: '모바일',
-        displayOrder: 0,
-      ),
-    );
-    if (destination != null) {
-      _shiftTransactionOrder(destination.id);
-      _transactions.add(
-        LedgerTransaction(
-          id: _newId('transaction'),
-          accountId: destination.id,
-          title: source.ownerName,
-          signedAmount: amount,
-          occurredAt: occurredAt,
-          channel: '내계좌이체',
-          displayOrder: 0,
-        ),
-      );
-    }
-    await _commit();
-  }
-
   Future<LedgerTransaction?> duplicateTransaction(String transactionId) async {
     final source = _transactions
         .where((item) => item.id == transactionId)
@@ -708,16 +644,6 @@ class AppDataStore extends ChangeNotifier {
       }
     }
     await _commit();
-  }
-
-  void _shiftTransactionOrder(String accountId) {
-    final existing = transactionsFor(accountId);
-    for (var i = 0; i < existing.length; i++) {
-      final index = _transactions.indexWhere(
-        (item) => item.id == existing[i].id,
-      );
-      _transactions[index] = existing[i].copyWith(displayOrder: i + 1);
-    }
   }
 
   Future<void> _commit() async {

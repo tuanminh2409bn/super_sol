@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:super_sol/core/app_data.dart';
@@ -293,6 +294,37 @@ void main() {
     expect(find.text('test@gmail.com'), findsNothing);
     expect(find.byKey(const Key('account-home-glyph')), findsOneWidget);
     expect(find.byKey(const Key('account-scan-icon')), findsOneWidget);
+    expect(find.byKey(const Key('account-copy-glyph')), findsOneWidget);
+    final accountNumberRect = tester.getRect(
+      find.byKey(const Key('account-number-text')),
+    );
+    final copyRect = tester.getRect(
+      find.byKey(const Key('account-copy-glyph')),
+    );
+    expect(copyRect.size, const Size.square(15));
+    expect(copyRect.left - accountNumberRect.right, closeTo(5, .1));
+    expect(copyRect.center.dy, closeTo(accountNumberRect.center.dy, .1));
+
+    String? copiedAccountNumber;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copiedAccountNumber =
+              (call.arguments as Map<Object?, Object?>)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('account-copy')));
+    await tester.pump();
+    expect(copiedAccountNumber, '110-628-103680');
     final homeIconCenter = tester.getCenter(
       find.byKey(const Key('account-home-glyph')),
     );
@@ -464,6 +496,20 @@ void main() {
     expect(find.text('아래 계좌로\n100원 보낼까요?'), findsOneWidget);
     expect(find.text('수수료 무료'), findsOneWidget);
     expect(find.text('보내기'), findsOneWidget);
+    expect(find.text('보내는 계좌'), findsOneWidget);
+    expect(find.text('받는 계좌'), findsOneWidget);
+    expect(find.text('받는분 메모'), findsOneWidget);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: find.byKey(const Key('transfer-review-details-toggle')),
+              matching: find.byType(Icon),
+            ),
+          )
+          .icon,
+      Icons.keyboard_arrow_down_rounded,
+    );
     expect(
       tester
           .widget<FilledButton>(find.byKey(const Key('transfer-next')))
@@ -473,13 +519,28 @@ void main() {
 
     await tester.tap(find.byKey(const Key('transfer-review-details-toggle')));
     await tester.pump();
-    expect(find.text('보내는 계좌'), findsOneWidget);
-    expect(find.text('받는 계좌'), findsOneWidget);
-    expect(find.text('받는분 메모'), findsOneWidget);
+    expect(find.text('보내는 계좌'), findsNothing);
+    expect(find.text('받는 계좌'), findsNothing);
+    expect(find.text('받는분 메모'), findsNothing);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: find.byKey(const Key('transfer-review-details-toggle')),
+              matching: find.byType(Icon),
+            ),
+          )
+          .icon,
+      Icons.keyboard_arrow_up_rounded,
+    );
 
     final balanceBeforeFailure = AppDataStore.shared.balanceFor(
       AppDataStore.shared.accounts.first.id,
     );
+    final transactionsBeforeFailure = AppDataStore.shared
+        .transactionsFor(AppDataStore.shared.accounts.first.id)
+        .map((transaction) => transaction.id)
+        .toList();
     await tester.tap(find.byKey(const Key('transfer-next')));
     await tester.pumpAndSettle();
     expect(find.text('계좌 비밀번호'), findsOneWidget);
@@ -493,9 +554,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('전화금융사고 및 기타금융사고 등록고객은\n지급거래 불가합니다.'), findsOneWidget);
     expect(find.text('확인'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
     expect(
       AppDataStore.shared.balanceFor(AppDataStore.shared.accounts.first.id),
-      balanceBeforeFailure - 100,
+      balanceBeforeFailure,
+    );
+    expect(
+      AppDataStore.shared
+          .transactionsFor(AppDataStore.shared.accounts.first.id)
+          .map((transaction) => transaction.id),
+      transactionsBeforeFailure,
     );
     await tester.tap(find.byKey(const Key('transfer-failure-home-confirm')));
     await tester.pumpAndSettle();
@@ -652,48 +720,77 @@ void main() {
     expect(find.byKey(const Key('transfer-bank-selector')), findsOneWidget);
   });
 
-  testWidgets(
-    'typing three account digits shows and selects saved suggestions',
-    (tester) async {
-      _configureMockupViewport(tester);
-      final store = AppDataStore.inMemory(withMockData: false);
-      await store.createAccount(
-        bankCode: '신한',
-        bankDisplayName: '신한',
-        ownerName: 'TEST OWNER',
-        accountNumber: '110000000000',
-        accountType: '입출금',
-        openingBalance: 500000,
-      );
-      final recipient = await store.createRecipient(
-        displayName: 'SUGGESTED RECIPIENT',
-        bankCode: '우리',
-        accountNumber: '123456789012',
-      );
+  testWidgets('four account digits show the matching compact suggestion chip', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    await store.createAccount(
+      bankCode: '신한',
+      bankDisplayName: '신한',
+      ownerName: 'TEST OWNER',
+      accountNumber: '110000000000',
+      accountType: '입출금',
+      openingBalance: 500000,
+    );
+    final pham = await store.createRecipient(
+      displayName: 'PHAM DINH',
+      bankCode: '토스뱅크',
+      accountNumber: '100191200803',
+    );
+    final trinh = await store.createRecipient(
+      displayName: 'TRINH TRUN',
+      bankCode: '우리',
+      accountNumber: '1002365702814',
+    );
 
-      await tester.pumpWidget(
-        _TestHost(home: TransferRecipientScreen(dataStore: store)),
-      );
-      await tester.tap(find.byKey(const Key('transfer-manual-entry')));
-      await tester.pump();
-      for (final digit in ['1', '2', '3']) {
-        await tester.tap(find.byKey(Key('account-key-$digit')));
-      }
-      await tester.pump();
+    await tester.pumpWidget(
+      _TestHost(home: TransferRecipientScreen(dataStore: store)),
+    );
+    await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+    await tester.pump();
+    for (final digit in ['1', '0', '0', '1']) {
+      await tester.tap(find.byKey(Key('account-key-$digit')));
+    }
+    await tester.pump();
 
-      expect(
-        find.byKey(const Key('transfer-account-suggestions')),
-        findsOneWidget,
-      );
-      await tester.tap(
-        find.byKey(Key('transfer-account-suggestion-${recipient.id}')),
-      );
-      await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('transfer-account-suggestions')),
+      findsOneWidget,
+    );
+    expect(find.text('PHAM DINH 100191200803'), findsOneWidget);
+    expect(find.text('TRINH TRUN 1002365702814'), findsNothing);
+    expect(find.text('은행 또는 증권사 선택'), findsOneWidget);
+    expect(
+      find.byKey(Key('transfer-account-suggestion-${pham.id}')),
+      findsOneWidget,
+    );
+    final bankRect = tester.getRect(
+      find.byKey(const Key('transfer-bank-selector')),
+    );
+    final suggestionRect = tester.getRect(
+      find.byKey(const Key('transfer-account-suggestions')),
+    );
+    expect(suggestionRect.top, greaterThan(bankRect.bottom));
+    expect(suggestionRect.height, 44);
 
-      expect(find.text('SUGGESTED RECIPIENT님 계좌로'), findsOneWidget);
-      expect(find.textContaining('123456789012'), findsOneWidget);
-    },
-  );
+    await tester.tap(find.byKey(const Key('transfer-clear-account')));
+    await tester.pump();
+    for (final digit in ['1', '0', '0', '2']) {
+      await tester.tap(find.byKey(Key('account-key-$digit')));
+    }
+    await tester.pump();
+
+    expect(find.text('PHAM DINH 100191200803'), findsNothing);
+    expect(find.text('TRINH TRUN 1002365702814'), findsOneWidget);
+    await tester.tap(
+      find.byKey(Key('transfer-account-suggestion-${trinh.id}')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TRINH TRUN님 계좌로'), findsOneWidget);
+    expect(find.textContaining('1002365702814'), findsOneWidget);
+  });
 
   testWidgets(
     'account suggestions include newly saved accounts and all matching recipients',
@@ -712,19 +809,19 @@ void main() {
         bankCode: '우리',
         bankDisplayName: '우리',
         ownerName: 'SECOND OWNER',
-        accountNumber: '123000000001',
+        accountNumber: '123400000001',
         accountType: '새로 추가한 계좌',
         openingBalance: 300000,
       );
       final first = await store.createRecipient(
         displayName: 'MATCH ONE',
         bankCode: '국민',
-        accountNumber: '123000000002',
+        accountNumber: '123400000002',
       );
       final second = await store.createRecipient(
         displayName: 'MATCH TWO',
         bankCode: '하나',
-        accountNumber: '123000000003',
+        accountNumber: '123400000003',
       );
 
       await tester.pumpWidget(
@@ -732,26 +829,32 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('transfer-manual-entry')));
       await tester.pump();
-      for (final digit in ['1', '2', '3']) {
+      for (final digit in ['1', '2', '3', '4']) {
         await tester.tap(find.byKey(Key('account-key-$digit')));
       }
       await tester.pump();
 
       expect(
-        find.byKey(const Key('transfer-account-suggestion-123000000001')),
-        findsOneWidget,
-      );
-      expect(
         find.byKey(Key('transfer-account-suggestion-${first.id}')),
         findsOneWidget,
       );
-      expect(
+      final suggestionList = find.descendant(
+        of: find.byKey(const Key('transfer-account-suggestions')),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(
         find.byKey(Key('transfer-account-suggestion-${second.id}')),
-        findsOneWidget,
+        240,
+        scrollable: suggestionList,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('transfer-account-suggestion-123400000001')),
+        240,
+        scrollable: suggestionList,
       );
 
       await tester.tap(
-        find.byKey(const Key('transfer-account-suggestion-123000000001')),
+        find.byKey(const Key('transfer-account-suggestion-123400000001')),
       );
       await tester.pumpAndSettle();
       expect(find.text('새로 추가한 계좌 계좌로'), findsOneWidget);
@@ -884,17 +987,25 @@ void main() {
     expect(find.text('123,456원'), findsWidgets);
   });
 
-  testWidgets('successful transfer creates an expense transaction', (
+  testWidgets('transfer failure leaves balance and history unchanged', (
     tester,
   ) async {
     _configureMockupViewport(tester);
     final store = AppDataStore.inMemory();
     final accountId = store.accounts.first.id;
     final before = store.balanceFor(accountId);
+    final transactionsBefore = store
+        .transactionsFor(accountId)
+        .map((transaction) => transaction.id)
+        .toList();
     await tester.pumpWidget(
-      _TestHost(home: TransferRecipientScreen(dataStore: store)),
+      _TestHost(
+        home: HomeScreen(auth: _SignedInAuthService(), dataStore: store),
+      ),
     );
 
+    await tester.tap(find.byKey(const Key('home-transfer')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('recipient-TRINH TRUN')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('amount-key-1')));
@@ -915,51 +1026,62 @@ void main() {
     }
     await tester.pumpAndSettle();
 
-    expect(store.balanceFor(accountId), before - 1);
-    expect(store.transactionsFor(accountId).first.title, 'TRINH TRUN');
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(
+      find.byKey(const Key('transfer-failure-home-confirm')),
+      findsOneWidget,
+    );
+    expect(store.balanceFor(accountId), before);
+    expect(
+      store.transactionsFor(accountId).map((transaction) => transaction.id),
+      transactionsBefore,
+    );
   });
 
-  testWidgets(
-    'a completed manual transfer becomes a future account suggestion',
-    (tester) async {
-      _configureMockupViewport(tester);
-      final store = AppDataStore.inMemory();
-      await tester.pumpWidget(
-        _TestHost(home: TransferRecipientScreen(dataStore: store)),
-      );
+  testWidgets('a failed manual transfer does not create a saved recipient', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory();
+    await tester.pumpWidget(
+      _TestHost(home: TransferRecipientScreen(dataStore: store)),
+    );
 
-      await tester.tap(find.byKey(const Key('transfer-manual-entry')));
-      await tester.pump();
-      for (final digit in '777000001234'.split('')) {
-        await tester.tap(find.byKey(Key('account-key-$digit')));
-      }
-      await tester.tap(find.byKey(const Key('transfer-bank-selector')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('bank-우리')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('transfer-next')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('amount-key-1')));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('transfer-next')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('transfer-next')));
-      await tester.pumpAndSettle();
-      for (final digit in ['0', '1', '2', '3']) {
-        await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
-      }
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+    await tester.pump();
+    for (final digit in '777000001234'.split('')) {
+      await tester.tap(find.byKey(Key('account-key-$digit')));
+    }
+    await tester.tap(find.byKey(const Key('transfer-bank-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bank-우리')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('amount-key-1')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await tester.pumpAndSettle();
+    for (final digit in ['0', '1', '2', '3']) {
+      await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
+    }
+    await tester.pumpAndSettle();
 
-      expect(
-        store.recipients.any(
-          (recipient) =>
-              recipient.bankCode == '우리' &&
-              recipient.accountNumber == '777000001234',
-        ),
-        isTrue,
-      );
-    },
-  );
+    expect(
+      find.byKey(const Key('transfer-failure-home-confirm')),
+      findsOneWidget,
+    );
+    expect(
+      store.recipients.any(
+        (recipient) =>
+            recipient.bankCode == '우리' &&
+            recipient.accountNumber == '777000001234',
+      ),
+      isFalse,
+    );
+  });
 
   testWidgets('home and account management react to stored data', (
     tester,

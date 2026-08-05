@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/app_data.dart';
 import '../core/auth_service.dart';
@@ -86,14 +87,22 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
   }
 
   Future<void> _openTransferRecipient() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final result = await Navigator.of(context).push<TransferFlowResult>(
+      MaterialPageRoute<TransferFlowResult>(
         builder: (_) => TransferRecipientScreen(dataStore: widget.dataStore),
       ),
     );
-    if (mounted) {
-      showDeviceStatusBar(darkIcons: true, backgroundColor: Colors.white);
+    if (!mounted) return;
+    if (result == TransferFlowResult.failed) {
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop(result);
+      } else {
+        await showTransferFailurePopup(context);
+      }
+      return;
     }
+    showDeviceStatusBar(darkIcons: true, backgroundColor: Colors.white);
   }
 
   Future<void> _openManagement() async {
@@ -343,14 +352,17 @@ class _AccountSummary extends StatelessWidget {
         Positioned(
           left: 28,
           top: 245,
-          width: 58,
-          height: 58,
+          width: BankLogoSize.account,
+          height: BankLogoSize.account,
           child: account == null
               ? const Icon(Icons.account_balance_rounded)
-              : BankLogo(bankCode: account!.bankCode, size: 58),
+              : BankLogo(
+                  bankCode: account!.bankCode,
+                  size: BankLogoSize.account,
+                ),
         ),
         Positioned(
-          left: 91,
+          left: 98,
           top: 248,
           child: Text(
             account?.accountType ?? '등록된 계좌가 없습니다',
@@ -363,17 +375,34 @@ class _AccountSummary extends StatelessWidget {
           ),
         ),
         Positioned(
-          left: 91,
+          left: 98,
           top: 291,
-          child: Text(
-            account == null
-                ? '-'
-                : '${account!.bankDisplayName} ${account!.accountNumber}',
-            style: const TextStyle(
-              color: Color(0xFF454B57),
-              fontSize: 18,
-              letterSpacing: -.5,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                key: const Key('account-number-text'),
+                account == null
+                    ? '-'
+                    : '${account!.bankDisplayName} ${account!.accountNumber}',
+                style: const TextStyle(
+                  color: Color(0xFF454B57),
+                  fontSize: 18,
+                  letterSpacing: -.5,
+                ),
+              ),
+              if (account != null) ...[
+                const SizedBox(width: 5),
+                GestureDetector(
+                  key: const Key('account-copy'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Clipboard.setData(
+                    ClipboardData(text: account!.accountNumber),
+                  ),
+                  child: const _AccountCopyIcon(key: Key('account-copy-glyph')),
+                ),
+              ],
+            ],
           ),
         ),
         const Positioned(
@@ -499,6 +528,50 @@ class _AccountScanIcon extends StatelessWidget {
       child: CustomPaint(painter: _AccountScanPainter()),
     );
   }
+}
+
+class _AccountCopyIcon extends StatelessWidget {
+  const _AccountCopyIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 15,
+      child: CustomPaint(painter: _AccountCopyPainter()),
+    );
+  }
+}
+
+class _AccountCopyPainter extends CustomPainter {
+  const _AccountCopyPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF454B57)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeJoin = StrokeJoin.round;
+
+    canvas
+      ..drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(4.4, 1.4, 9.1, 9.1),
+          const Radius.circular(.6),
+        ),
+        paint,
+      )
+      ..drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(1.5, 4.5, 9.1, 9.1),
+          const Radius.circular(.6),
+        ),
+        paint,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_AccountCopyPainter oldDelegate) => false;
 }
 
 class _AccountScanPainter extends CustomPainter {
