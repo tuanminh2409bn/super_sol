@@ -12,13 +12,24 @@ const _ink = Color(0xFF111827);
 const _muted = Color(0xFF818A99);
 const _line = Color(0xFFD9DDE5);
 const _blue = Color(0xFF0969F6);
+const _pinBlue = Color(0xFF005DFA);
+const _recipientInk = Color(0xFF303846);
+const _recipientMuted = Color(0xFF657084);
+const _recipientPlaceholder = Color(0xFF8A93A4);
+const _recipientSectionStyle = TextStyle(
+  color: _recipientInk,
+  fontSize: 20,
+  fontWeight: FontWeight.w500,
+  fontVariations: [FontVariation('wght', 580)],
+  letterSpacing: -.45,
+);
 
 enum TransferFlowResult { failed }
 
 Future<void> showTransferFailurePopup(BuildContext context) {
   return showDialog<void>(
     context: context,
-    barrierColor: const Color(0x8B27303E),
+    barrierColor: const Color(0xC7F4F6FA),
     builder: (_) => const _TransferFailurePopup(),
   );
 }
@@ -26,10 +37,16 @@ Future<void> showTransferFailurePopup(BuildContext context) {
 enum _TransferStage { recipient, amount, confirmation, pin }
 
 class TransferRecipientScreen extends StatefulWidget {
-  TransferRecipientScreen({super.key, AppDataStore? dataStore})
-    : dataStore = dataStore ?? AppDataStore.shared;
+  TransferRecipientScreen({
+    super.key,
+    AppDataStore? dataStore,
+    this.initialPinKeys,
+  }) : assert(initialPinKeys == null || initialPinKeys.length == 10),
+       dataStore = dataStore ?? AppDataStore.shared;
 
   final AppDataStore dataStore;
+  @visibleForTesting
+  final List<String>? initialPinKeys;
 
   @override
   State<TransferRecipientScreen> createState() =>
@@ -39,6 +56,7 @@ class TransferRecipientScreen extends StatefulWidget {
 class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   _TransferStage _stage = _TransferStage.recipient;
   bool _manualEntry = false;
+  bool _favoriteRecipientsExpanded = false;
   bool _myAccountsExpanded = false;
   bool _recentRecipientsExpanded = true;
   bool _reviewDetailsExpanded = true;
@@ -277,7 +295,9 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   void _startPinEntry() {
     setState(() {
       _pinDigits.clear();
-      _pinKeys = _shuffledPinKeys();
+      _pinKeys = List<String>.unmodifiable(
+        widget.initialPinKeys ?? _shuffledPinKeys(),
+      );
       _stage = _TransferStage.pin;
     });
   }
@@ -340,7 +360,14 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   @override
   Widget build(BuildContext context) {
     final sourceAccount = _selectedSourceAccount;
-    final actionButtonBottom = _stage == _TransferStage.amount ? 20.0 : 54.0;
+    final actionButtonBottom = _stage == _TransferStage.amount
+        ? 20.0
+        : _stage == _TransferStage.confirmation
+        ? 48.0
+        : 54.0;
+    final actionButtonHeight = _stage == _TransferStage.confirmation
+        ? 78.0
+        : 79.0;
     return PopScope(
       onPopInvokedWithResult: (_, __) => showDeviceStatusBar(
         darkIcons: true,
@@ -407,9 +434,15 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                 _RecipientLanding(
                   ownAccounts: _ownAccounts,
                   recipients: _savedRecipients,
+                  favoriteRecipientsExpanded: _favoriteRecipientsExpanded,
                   myAccountsExpanded: _myAccountsExpanded,
                   recentRecipientsExpanded: _recentRecipientsExpanded,
                   onSearch: _searchRecipients,
+                  onEditFavorites: _openRecipientManagement,
+                  onToggleFavoriteRecipients: () => setState(
+                    () => _favoriteRecipientsExpanded =
+                        !_favoriteRecipientsExpanded,
+                  ),
                   onToggleMyAccounts: () => setState(
                     () => _myAccountsExpanded = !_myAccountsExpanded,
                   ),
@@ -428,7 +461,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                   left: 28,
                   right: 28,
                   bottom: actionButtonBottom,
-                  height: 79,
+                  height: actionButtonHeight,
                   child: FilledButton(
                     key: const Key('transfer-next'),
                     onPressed: _stage == _TransferStage.amount
@@ -455,9 +488,14 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                     ),
                     child: Text(
                       _stage == _TransferStage.confirmation ? '보내기' : '다음',
-                      style: const TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.w700,
+                      style: TextStyle(
+                        fontSize: _manualEntry ? 22 : 23,
+                        fontWeight: _manualEntry
+                            ? FontWeight.w500
+                            : FontWeight.w700,
+                        fontVariations: [
+                          FontVariation('wght', _manualEntry ? 500 : 700),
+                        ],
                       ),
                     ),
                   ),
@@ -516,15 +554,16 @@ class _TopControls extends StatelessWidget {
             style: TextStyle(
               color: _blue,
               fontSize: 20,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
+              fontVariations: [FontVariation('wght', 560)],
               letterSpacing: -.1,
             ),
           ),
         ),
       if (showRecipientActions)
         Positioned(
-          right: 84,
-          top: 112,
+          right: 89,
+          top: 99,
           width: 45,
           height: 45,
           child: IconButton(
@@ -625,9 +664,12 @@ class _RecipientLanding extends StatelessWidget {
   const _RecipientLanding({
     required this.ownAccounts,
     required this.recipients,
+    required this.favoriteRecipientsExpanded,
     required this.myAccountsExpanded,
     required this.recentRecipientsExpanded,
     required this.onSearch,
+    required this.onEditFavorites,
+    required this.onToggleFavoriteRecipients,
     required this.onToggleMyAccounts,
     required this.onToggleRecentRecipients,
     required this.onManual,
@@ -637,9 +679,12 @@ class _RecipientLanding extends StatelessWidget {
   });
   final List<_Recipient> ownAccounts;
   final List<_Recipient> recipients;
+  final bool favoriteRecipientsExpanded;
   final bool myAccountsExpanded;
   final bool recentRecipientsExpanded;
   final VoidCallback onSearch;
+  final VoidCallback onEditFavorites;
+  final VoidCallback onToggleFavoriteRecipients;
   final VoidCallback onToggleMyAccounts;
   final VoidCallback onToggleRecentRecipients;
   final VoidCallback onManual;
@@ -648,7 +693,16 @@ class _RecipientLanding extends StatelessWidget {
   final ValueChanged<_Recipient> onToggleFavorite;
   @override
   Widget build(BuildContext context) {
-    final recentOffset = myAccountsExpanded ? ownAccounts.length * 97.0 : 0.0;
+    final favoriteRecipients = recipients
+        .where((recipient) => recipient.favorite)
+        .toList(growable: false);
+    final favoriteOffset = favoriteRecipientsExpanded
+        ? favoriteRecipients.length * 97.0
+        : 0.0;
+    final ownAccountsOffset = myAccountsExpanded
+        ? ownAccounts.length * 97.0
+        : 0.0;
+    final recentOffset = favoriteOffset + ownAccountsOffset;
     return Stack(
       children: [
         const Positioned(
@@ -658,7 +712,8 @@ class _RecipientLanding extends StatelessWidget {
             '누구에게 보낼까요?',
             style: TextStyle(
               fontSize: 34,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
+              fontVariations: [FontVariation('wght', 650)],
               letterSpacing: -1.5,
             ),
           ),
@@ -680,11 +735,19 @@ class _RecipientLanding extends StatelessWidget {
           child: InkWell(
             key: const Key('transfer-manual-entry'),
             onTap: onManual,
-            child: const Align(
+            child: Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                '계좌번호 직접 입력',
-                style: TextStyle(fontSize: 21, color: _muted),
+              child: Transform.translate(
+                offset: const Offset(0, -5),
+                child: const Text(
+                  '계좌번호 직접 입력',
+                  style: TextStyle(
+                    fontSize: 21,
+                    color: _recipientPlaceholder,
+                    fontWeight: FontWeight.w400,
+                    fontVariations: [FontVariation('wght', 470)],
+                  ),
+                ),
               ),
             ),
           ),
@@ -708,13 +771,79 @@ class _RecipientLanding extends StatelessWidget {
           left: 28,
           top: 387,
           child: Text(
-            '내 계좌',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            '자주쓰는 계좌',
+            key: Key('transfer-favorite-label'),
+            style: _recipientSectionStyle,
+          ),
+        ),
+        Positioned(
+          left: 152,
+          top: 382,
+          width: 49,
+          height: 36,
+          child: TextButton(
+            key: const Key('transfer-favorite-edit'),
+            onPressed: onEditFavorites,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: _recipientInk,
+              backgroundColor: const Color(0xFFF3F5F8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(11),
+              ),
+            ),
+            child: const Text(
+              '편집',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                fontVariations: [FontVariation('wght', 560)],
+              ),
+            ),
           ),
         ),
         Positioned(
           right: 28,
           top: 375,
+          child: _CountChip(
+            '${favoriteRecipients.length}개',
+            favoriteRecipientsExpanded
+                ? Icons.keyboard_arrow_up_rounded
+                : Icons.keyboard_arrow_down_rounded,
+            key: const Key('transfer-favorite-toggle'),
+            onTap: onToggleFavoriteRecipients,
+          ),
+        ),
+        if (favoriteRecipientsExpanded)
+          ...List.generate(
+            favoriteRecipients.length,
+            (index) => Positioned(
+              left: 28,
+              right: 25,
+              top: 431 + (index * 97),
+              height: 78,
+              child: _RecipientRow(
+                recipient: favoriteRecipients[index],
+                onTap: () => onSelect(favoriteRecipients[index]),
+                onFavorite: () => onToggleFavorite(favoriteRecipients[index]),
+                keyPrefix: 'favorite-recipient',
+              ),
+            ),
+          ),
+        Positioned(
+          left: 28,
+          top: 461 + favoriteOffset,
+          child: const Text(
+            '내 계좌',
+            key: Key('transfer-own-account-label'),
+            style: _recipientSectionStyle,
+          ),
+        ),
+        Positioned(
+          right: 28,
+          top: 449 + favoriteOffset,
           child: _CountChip(
             myAccountsExpanded ? '${ownAccounts.length}개' : '0개',
             myAccountsExpanded
@@ -730,7 +859,7 @@ class _RecipientLanding extends StatelessWidget {
             (index) => Positioned(
               left: 28,
               right: 25,
-              top: 431 + (index * 97),
+              top: 505 + favoriteOffset + (index * 97),
               height: 78,
               child: _RecipientRow(
                 recipient: ownAccounts[index],
@@ -740,15 +869,16 @@ class _RecipientLanding extends StatelessWidget {
           ),
         Positioned(
           left: 28,
-          top: 461 + recentOffset,
+          top: 535 + recentOffset,
           child: const Text(
             '최근',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            key: Key('transfer-recent-label'),
+            style: _recipientSectionStyle,
           ),
         ),
         Positioned(
           right: 28,
-          top: 449 + recentOffset,
+          top: 523 + recentOffset,
           child: _CountChip(
             '${AppDataStore.maxSavedRecipients}개',
             recentRecipientsExpanded
@@ -762,7 +892,7 @@ class _RecipientLanding extends StatelessWidget {
           Positioned(
             left: 28,
             right: 25,
-            top: 515 + recentOffset,
+            top: 600 + recentOffset,
             bottom: 0,
             child: ListView.separated(
               key: const Key('recent-recipient-list'),
@@ -827,8 +957,17 @@ class _CountChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(text, style: const TextStyle(fontSize: 17)),
-          Icon(icon),
+          Text(
+            text,
+            style: const TextStyle(
+              color: _recipientInk,
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+              fontVariations: [FontVariation('wght', 540)],
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(icon, size: 22, color: _recipientInk),
         ],
       ),
     ),
@@ -859,13 +998,15 @@ class _RecipientRow extends StatelessWidget {
     required this.recipient,
     required this.onTap,
     this.onFavorite,
+    this.keyPrefix = 'recipient',
   });
   final _Recipient recipient;
   final VoidCallback onTap;
   final VoidCallback? onFavorite;
+  final String keyPrefix;
   @override
   Widget build(BuildContext context) => InkWell(
-    key: Key('recipient-${recipient.name}'),
+    key: Key('$keyPrefix-${recipient.name}'),
     onTap: onTap,
     borderRadius: BorderRadius.circular(15),
     child: Row(
@@ -883,13 +1024,21 @@ class _RecipientRow extends StatelessWidget {
               Text(
                 recipient.name,
                 style: const TextStyle(
+                  color: _recipientInk,
                   fontSize: 20,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
+                  fontVariations: [FontVariation('wght', 560)],
                 ),
               ),
+              const SizedBox(height: 3),
               Text(
                 '${recipient.bank} ${recipient.account}',
-                style: const TextStyle(fontSize: 17, color: _muted),
+                style: const TextStyle(
+                  fontSize: 17,
+                  color: _recipientMuted,
+                  fontWeight: FontWeight.w400,
+                  fontVariations: [FontVariation('wght', 450)],
+                ),
               ),
             ],
           ),
@@ -902,7 +1051,7 @@ class _RecipientRow extends StatelessWidget {
           )
         else
           GestureDetector(
-            key: Key('recipient-favorite-${recipient.recipientId}'),
+            key: Key('$keyPrefix-favorite-${recipient.recipientId}'),
             behavior: HitTestBehavior.opaque,
             onTap: onFavorite,
             child: Icon(
@@ -1004,16 +1153,16 @@ class _ManualEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasSuggestions = suggestions.isNotEmpty;
-    const bankTop = 413.0;
+    const bankTop = 412.0;
     return Stack(
       children: [
         const Positioned(
           left: 28,
-          top: 201,
+          top: 198,
           child: Text(
             '누구에게 보낼까요?',
             style: TextStyle(
-              fontSize: 34,
+              fontSize: 33.5,
               fontWeight: FontWeight.w700,
               letterSpacing: -1.5,
             ),
@@ -1044,16 +1193,10 @@ class _ManualEntry extends StatelessWidget {
               onSelect: onSelectSuggestion,
             ),
           ),
-        if (bank != null)
-          Positioned(
-            left: 28,
-            top: bankTop + (hasSuggestions ? 181 : 122),
-            child: const _BankChips(),
-          ),
         Positioned(
-          left: 47,
-          right: 47,
-          top: 782,
+          left: 0,
+          right: 0,
+          top: 790,
           height: 355,
           child: _NumericPad(
             prefix: 'account',
@@ -1138,7 +1281,7 @@ class _AccountBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     key: const Key('transfer-account-input'),
-    padding: const EdgeInsets.fromLTRB(22, 18, 16, 12),
+    padding: const EdgeInsets.fromLTRB(20, 18, 16, 12),
     decoration: BoxDecoration(
       border: Border.all(color: _blue, width: 3),
       borderRadius: BorderRadius.circular(17),
@@ -1146,16 +1289,37 @@ class _AccountBox extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('계좌번호', style: TextStyle(color: _blue, fontSize: 16)),
+        const Text(
+          '계좌번호',
+          style: TextStyle(
+            color: _blue,
+            fontSize: 17,
+            fontWeight: FontWeight.w400,
+            fontVariations: [FontVariation('wght', 400)],
+            letterSpacing: -.2,
+          ),
+        ),
         const SizedBox(height: 7),
         Row(
           children: [
+            if (account.isEmpty) ...[
+              Container(
+                key: const Key('transfer-account-caret'),
+                width: 2,
+                height: 34,
+                color: const Color(0xFFB9DFFF),
+              ),
+              const SizedBox(width: 10),
+            ],
             Expanded(
               child: Text(
                 account.isEmpty ? '- 없이 숫자만 입력' : account,
                 style: TextStyle(
-                  fontSize: 23,
+                  fontSize: 26,
                   color: account.isEmpty ? _muted : _ink,
+                  fontWeight: FontWeight.w300,
+                  fontVariations: const [FontVariation('wght', 350)],
+                  letterSpacing: -.4,
                 ),
               ),
             ),
@@ -1200,8 +1364,10 @@ class _BankBox extends StatelessWidget {
                   '은행 또는 증권사 선택',
                   style: TextStyle(
                     color: _muted,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w400,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w300,
+                    fontVariations: [FontVariation('wght', 350)],
+                    letterSpacing: -.4,
                   ),
                 )
               : Column(
@@ -1224,46 +1390,6 @@ class _BankBox extends StatelessWidget {
                 ),
         ),
         const Icon(Icons.keyboard_arrow_down_rounded, color: _ink, size: 35),
-      ],
-    ),
-  );
-}
-
-class _BankChips extends StatelessWidget {
-  const _BankChips();
-  @override
-  Widget build(BuildContext context) => const Row(
-    children: [
-      _TinyChip('신한', Color(0xFF0759D7)),
-      SizedBox(width: 10),
-      _TinyChip('케이뱅크', Color(0xFF1C168F)),
-      SizedBox(width: 10),
-      _TinyChip('토스뱅크', Color(0xFF347CF7)),
-    ],
-  );
-}
-
-class _TinyChip extends StatelessWidget {
-  const _TinyChip(this.label, this.color);
-  final String label;
-  final Color color;
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 43,
-    padding: const EdgeInsets.symmetric(horizontal: 14),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF2F5FA),
-      borderRadius: BorderRadius.circular(23),
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 21,
-          height: 21,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 16)),
       ],
     ),
   );
@@ -1665,7 +1791,7 @@ class _NumericPad extends StatelessWidget {
       padding: EdgeInsets.zero,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 3,
-      childAspectRatio: showDoubleZero ? 2.2 : 2,
+      childAspectRatio: showDoubleZero ? 2.2 : 2.3,
       children: [
         ...values.map(
           (value) => TextButton(
@@ -1673,9 +1799,12 @@ class _NumericPad extends StatelessWidget {
             onPressed: value.isEmpty ? null : () => onDigit(value),
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 35,
-                fontWeight: FontWeight.w700,
+                fontWeight: showDoubleZero ? FontWeight.w700 : FontWeight.w400,
+                fontVariations: [
+                  FontVariation('wght', showDoubleZero ? 700 : 400),
+                ],
                 color: _ink,
               ),
             ),
@@ -1706,96 +1835,154 @@ class _BankSelectorDialogState extends State<_BankSelectorDialog> {
     final names = securities
         ? BankCatalog.securitiesCodes
         : BankCatalog.bankCodes;
-    return Material(
-      color: Colors.transparent,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(onTap: () => Navigator.pop(context)),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 129,
-            bottom: 0,
-            child: GestureDetector(
-              onTap: () {},
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-                ),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(28, 24, 20, 18),
-                      child: Row(
+    // The selector lives on its own Navigator route. Rendering its fixed
+    // coordinates directly in Android logical pixels made a 50 px logo appear
+    // about 75 physical pixels on devices such as the Samsung reference
+    // handset. Scale the complete 589 px artwork to the route width so the
+    // sheet, tiles, labels and logos all retain the original proportions on
+    // both tabs. Its height may extend below the route and is deliberately
+    // clipped above Android's persistent system navigation bar.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = constraints.maxWidth / mockupWidth;
+        final hiddenBottom = max(
+          0.0,
+          mockupHeight - (constraints.maxHeight / scale),
+        );
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: mockupWidth * scale,
+              height: mockupHeight * scale,
+              child: FittedBox(
+                fit: BoxFit.fill,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: mockupWidth,
+                  height: mockupHeight,
+                  child: MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(textScaler: TextScaler.noScaling),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: Stack(
                         children: [
-                          const Expanded(
-                            child: Text(
-                              '은행 또는 증권사 선택',
-                              style: TextStyle(
-                                fontSize: 25,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          Positioned.fill(
+                            child: GestureDetector(
+                              onTap: () => Navigator.pop(context),
                             ),
                           ),
-                          IconButton(
-                            key: const Key('bank-selector-close'),
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close_rounded, size: 35),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: 129,
+                            bottom: 0,
+                            child: GestureDetector(
+                              onTap: () {},
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(26),
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        28,
+                                        19,
+                                        20,
+                                        3,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Expanded(
+                                            child: Text(
+                                              '은행 또는 증권사 선택',
+                                              style: TextStyle(
+                                                fontSize: 26,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            key: const Key(
+                                              'bank-selector-close',
+                                            ),
+                                            onPressed: () =>
+                                                Navigator.pop(context),
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                              size: 35,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        _BankTab(
+                                          label: '은행',
+                                          selected: !securities,
+                                          onTap: () => setState(
+                                            () => securities = false,
+                                          ),
+                                        ),
+                                        _BankTab(
+                                          label: '증권사',
+                                          selected: securities,
+                                          onTap: () =>
+                                              setState(() => securities = true),
+                                        ),
+                                      ],
+                                    ),
+                                    Expanded(
+                                      child: GridView.builder(
+                                        key: Key(
+                                          securities
+                                              ? 'bank-selector-list-securities'
+                                              : 'bank-selector-list-banks',
+                                        ),
+                                        padding: EdgeInsets.fromLTRB(
+                                          28,
+                                          61,
+                                          28,
+                                          34 + hiddenBottom,
+                                        ),
+                                        gridDelegate:
+                                            const SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: 3,
+                                              mainAxisExtent: 134,
+                                              mainAxisSpacing: 11,
+                                              crossAxisSpacing: 12,
+                                            ),
+                                        itemCount: names.length,
+                                        itemBuilder: (_, i) => _BankTile(
+                                          name: names[i],
+                                          index: i,
+                                          onTap: () =>
+                                              Navigator.pop(context, names[i]),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    Row(
-                      children: [
-                        _BankTab(
-                          label: '은행',
-                          selected: !securities,
-                          onTap: () => setState(() => securities = false),
-                        ),
-                        _BankTab(
-                          label: '증권사',
-                          selected: securities,
-                          onTap: () => setState(() => securities = true),
-                        ),
-                      ],
-                    ),
-                    Expanded(
-                      child: GridView.builder(
-                        key: Key(
-                          securities
-                              ? 'bank-selector-list-securities'
-                              : 'bank-selector-list-banks',
-                        ),
-                        padding: const EdgeInsets.fromLTRB(28, 29, 28, 34),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              // A fixed height makes the label safe at every
-                              // device scale. The previous aspect-ratio grid
-                              // could shrink each cell enough to overflow on
-                              // Android when Korean text metrics were used.
-                              mainAxisExtent: 138,
-                              mainAxisSpacing: 14,
-                              crossAxisSpacing: 12,
-                            ),
-                        itemCount: names.length,
-                        itemBuilder: (_, i) => _BankTile(
-                          name: names[i],
-                          index: i,
-                          onTap: () => Navigator.pop(context, names[i]),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -1815,7 +2002,7 @@ class _BankTab extends StatelessWidget {
       key: Key('bank-tab-$label'),
       onTap: onTap,
       child: Container(
-        height: 78,
+        height: 64,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           border: Border(
@@ -1867,15 +2054,16 @@ class _BankTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        height: 138,
+        height: 134,
         decoration: BoxDecoration(
           color: const Color(0xFFF0F3FA),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           children: [
-            const SizedBox(height: 17),
+            const SizedBox(height: 20),
             SizedBox.square(
+              key: Key('bank-logo-frame-$name'),
               dimension: BankLogoSize.picker,
               child: asset != null
                   ? BankLogo(bankCode: name, size: BankLogoSize.picker)
@@ -1895,7 +2083,7 @@ class _BankTile extends StatelessWidget {
                       ),
                     ),
             ),
-            const SizedBox(height: 11),
+            const SizedBox(height: 14),
             Text(
               name,
               maxLines: 1,
@@ -1947,12 +2135,13 @@ class _TransferReviewPage extends StatelessWidget {
         Positioned(
           left: 0,
           right: 0,
-          top: 184,
+          top: 226,
           child: Center(
             child: Container(
+              key: const Key('transfer-review-logo'),
               width: 76,
               height: 76,
-              padding: const EdgeInsets.all(9),
+              padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 color: const Color(0xFFF7F9FC),
                 shape: BoxShape.circle,
@@ -1964,21 +2153,22 @@ class _TransferReviewPage extends StatelessWidget {
                       color: _blue,
                       size: 46,
                     )
-                  : BankLogo(bankCode: bank, size: BankLogoSize.account),
+                  : BankLogo(bankCode: bank, size: 72),
             ),
           ),
         ),
         Positioned(
           left: 0,
           right: 0,
-          top: 264,
+          top: 320,
           child: Text(
+            key: const Key('transfer-review-title'),
             '$_recipientLabel\n${_AmountPage._formatted(amount)}원 보낼까요?',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: _ink,
-              fontSize: 31,
-              height: 1.35,
+              fontSize: 33,
+              height: 1.42,
               fontWeight: FontWeight.w700,
               letterSpacing: -1.1,
             ),
@@ -1987,14 +2177,16 @@ class _TransferReviewPage extends StatelessWidget {
         const Positioned(
           left: 0,
           right: 0,
-          top: 355,
+          top: 437,
           child: Text(
+            key: Key('transfer-review-fee'),
             '수수료 무료',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _muted,
+              color: Color(0xFF626B79),
               fontSize: 20,
               fontWeight: FontWeight.w400,
+              fontVariations: [FontVariation('wght', 450)],
             ),
           ),
         ),
@@ -2002,8 +2194,8 @@ class _TransferReviewPage extends StatelessWidget {
           Positioned(
             left: 28,
             right: 28,
-            top: 412,
-            height: 190,
+            top: 515,
+            height: 230,
             child: _TransferDetailsCard(
               sourceAccount: sourceAccount,
               bank: bank,
@@ -2014,7 +2206,7 @@ class _TransferReviewPage extends StatelessWidget {
         Positioned(
           left: 0,
           right: 0,
-          top: detailsExpanded ? 580 : 410,
+          top: detailsExpanded ? 721 : 513,
           child: Center(
             child: InkWell(
               key: const Key('transfer-review-details-toggle'),
@@ -2031,12 +2223,15 @@ class _TransferReviewPage extends StatelessWidget {
                     width: 1.5,
                   ),
                 ),
-                child: Icon(
-                  detailsExpanded
-                      ? Icons.keyboard_arrow_down_rounded
-                      : Icons.keyboard_arrow_up_rounded,
-                  color: _ink,
-                  size: 29,
+                child: Transform.scale(
+                  scale: 1.3,
+                  child: Icon(
+                    detailsExpanded
+                        ? Icons.keyboard_arrow_down_rounded
+                        : Icons.keyboard_arrow_up_rounded,
+                    color: _ink,
+                    size: 31,
+                  ),
                 ),
               ),
             ),
@@ -2062,9 +2257,10 @@ class _TransferDetailsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(18, 22, 24, 14),
+    key: const Key('transfer-review-details-card'),
+    padding: const EdgeInsets.fromLTRB(28, 29, 28, 14),
     decoration: BoxDecoration(
-      color: const Color(0xFFF6F7F9),
+      color: const Color(0xFFF7F8FA),
       borderRadius: BorderRadius.circular(18),
     ),
     child: Column(
@@ -2073,15 +2269,15 @@ class _TransferDetailsCard extends StatelessWidget {
           label: '보내는 계좌',
           value: '${sourceAccount.bank} ${sourceAccount.accountNumber}',
         ),
-        const SizedBox(height: 11),
+        const SizedBox(height: 18),
         _TransferDetailRow(label: '받는 계좌', value: '$bank $account'),
-        const SizedBox(height: 11),
+        const SizedBox(height: 18),
         _TransferDetailRow(
           label: '받는분 메모',
           value: sourceAccount.ownerName,
           editable: true,
         ),
-        const SizedBox(height: 11),
+        const SizedBox(height: 20),
         _TransferDetailRow(
           label: '내통장 메모',
           value: recipientName ?? '아래 계좌',
@@ -2108,7 +2304,14 @@ class _TransferDetailRow extends StatelessWidget {
     children: [
       SizedBox(
         width: 111,
-        child: Text(label, style: const TextStyle(fontSize: 18, color: _muted)),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 18,
+            color: Color(0xFF4F5662),
+            fontWeight: FontWeight.w400,
+          ),
+        ),
       ),
       Expanded(
         child: Text(
@@ -2116,12 +2319,18 @@ class _TransferDetailRow extends StatelessWidget {
           textAlign: TextAlign.right,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: _recipientInk,
+            fontSize: editable ? 20 : 19,
+            fontWeight: FontWeight.w400,
+            fontVariations: const [FontVariation('wght', 450)],
+            letterSpacing: editable ? .4 : 1.2,
+          ),
         ),
       ),
       if (editable) ...[
         const SizedBox(width: 4),
-        const Icon(Icons.edit_outlined, size: 20, color: _muted),
+        const Icon(Icons.edit_outlined, size: 20, color: _recipientMuted),
       ],
     ],
   );
@@ -2152,34 +2361,34 @@ class _TransferPinPage extends StatelessWidget {
         const Positioned(
           left: 0,
           right: 0,
-          top: 304,
+          top: 286,
           child: Text(
             '계좌 비밀번호',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 31, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
           ),
         ),
         Positioned(
           left: 0,
           right: 0,
-          top: 384,
+          top: 377,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(
               4,
               (index) => Container(
                 key: Key('transfer-pin-indicator-$index'),
-                width: 42,
-                height: 42,
-                margin: const EdgeInsets.symmetric(horizontal: 8),
+                width: 29,
+                height: 29,
+                margin: const EdgeInsets.symmetric(horizontal: 13.5),
                 decoration: BoxDecoration(
-                  color: index < enteredDigits ? _blue : Colors.white,
+                  color: index < enteredDigits ? _pinBlue : Colors.white,
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: index == enteredDigits || index < enteredDigits
-                        ? _blue
-                        : const Color(0xFF9BA3B0),
-                    width: 2.4,
+                        ? _pinBlue
+                        : const Color(0xFF858C99),
+                    width: 1.5,
                   ),
                 ),
               ),
@@ -2192,45 +2401,56 @@ class _TransferPinPage extends StatelessWidget {
           top: 870,
           bottom: 0,
           child: ColoredBox(
-            color: _blue,
-            child: GridView.count(
-              key: const Key('transfer-pin-keypad'),
-              padding: const EdgeInsets.fromLTRB(55, 34, 55, 22),
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 3,
-              childAspectRatio: 1.5,
-              children: [
-                ...padKeys
-                    .take(9)
-                    .map(
-                      (value) => _PinKey(
-                        key: Key('transfer-pin-key-$value'),
-                        label: value,
-                        onTap: () => onDigit(value),
+            color: _pinBlue,
+            child: Transform.translate(
+              offset: const Offset(0, -1),
+              child: GridView.count(
+                key: const Key('transfer-pin-keypad'),
+                padding: EdgeInsets.zero,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 3,
+                childAspectRatio: 2.1815,
+                children: [
+                  ...padKeys
+                      .take(9)
+                      .map(
+                        (value) => _PinKey(
+                          key: Key('transfer-pin-key-$value'),
+                          label: value,
+                          onTap: () => onDigit(value),
+                        ),
+                      ),
+                  Transform.translate(
+                    offset: const Offset(-1, 0),
+                    child: _PinKey(
+                      key: const Key('transfer-pin-rearrange'),
+                      label: '재배열',
+                      fontSize: 21,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 2.5,
+                      onTap: onRearrange,
+                    ),
+                  ),
+                  _PinKey(
+                    key: Key('transfer-pin-key-${padKeys[9]}'),
+                    label: padKeys[9],
+                    onTap: () => onDigit(padKeys[9]),
+                  ),
+                  IconButton(
+                    key: const Key('transfer-pin-delete'),
+                    onPressed: onDelete,
+                    icon: Transform.translate(
+                      offset: const Offset(0, 2),
+                      child: const Icon(
+                        Icons.backspace_outlined,
+                        color: Colors.white,
+                        size: 38,
+                        weight: 400,
                       ),
                     ),
-                _PinKey(
-                  key: const Key('transfer-pin-rearrange'),
-                  label: '재배열',
-                  fontSize: 20,
-                  onTap: onRearrange,
-                ),
-                _PinKey(
-                  key: Key('transfer-pin-key-${padKeys[9]}'),
-                  label: padKeys[9],
-                  onTap: () => onDigit(padKeys[9]),
-                ),
-                IconButton(
-                  key: const Key('transfer-pin-delete'),
-                  onPressed: onDelete,
-                  icon: const Icon(
-                    Icons.backspace_outlined,
-                    color: Colors.white,
-                    size: 38,
-                    weight: 700,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -2244,12 +2464,16 @@ class _PinKey extends StatelessWidget {
     super.key,
     required this.label,
     required this.onTap,
-    this.fontSize = 35,
+    this.fontSize = 32,
+    this.fontWeight = FontWeight.w400,
+    this.letterSpacing = 0,
   });
 
   final String label;
   final VoidCallback onTap;
   final double fontSize;
+  final FontWeight fontWeight;
+  final double letterSpacing;
 
   @override
   Widget build(BuildContext context) => TextButton(
@@ -2257,7 +2481,11 @@ class _PinKey extends StatelessWidget {
     style: TextButton.styleFrom(foregroundColor: Colors.white),
     child: Text(
       label,
-      style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600),
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        letterSpacing: letterSpacing,
+      ),
     ),
   );
 }
@@ -2267,39 +2495,80 @@ class _TransferFailurePopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Dialog(
-    insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(28, 41, 28, 27),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            '전화금융사고 및 기타금융사고 등록고객은\n지급거래 불가합니다.',
-            style: TextStyle(
-              fontSize: 19,
-              height: 1.45,
-              color: Color(0xFF353C48),
-            ),
-          ),
-          const SizedBox(height: 31),
-          FilledButton(
-            key: const Key('transfer-failure-home-confirm'),
-            onPressed: () => Navigator.of(context).pop(),
-            style: FilledButton.styleFrom(
-              backgroundColor: _blue,
-              minimumSize: const Size.fromHeight(67),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
+    elevation: 2,
+    shadowColor: const Color(0x18000000),
+    backgroundColor: Colors.white,
+    insetPadding: const EdgeInsets.symmetric(horizontal: 34),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    child: SizedBox(
+      height: 337,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(27, 45, 27, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'DEP20180',
+              style: TextStyle(
+                fontSize: 18,
+                height: 1.25,
+                color: Color(0xFFFF5C73),
               ),
             ),
-            child: const Text(
-              '확인',
-              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
+            const SizedBox(height: 14.5),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _TransferFailureBodyLine('전화금융사고 및 기타금융사고 등록고객은 지급거래'),
+                _TransferFailureBodyLine('불가합니다. 고객사고 정보 확인후 거래하세요.'),
+                _TransferFailureBodyLine('고객사고 등록으로 거래가 불가합니다. 신한은행 영업점'),
+                _TransferFailureBodyLine('또는 콜센터로 문의해 주시기 바랍니다.'),
+              ],
             ),
-          ),
-        ],
+            const Spacer(),
+            FilledButton(
+              key: const Key('transfer-failure-home-confirm'),
+              onPressed: () => Navigator.of(context).pop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF035CF8),
+                minimumSize: const Size.fromHeight(67),
+                maximumSize: const Size.fromHeight(67),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text(
+                '확인',
+                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _TransferFailureBodyLine extends StatelessWidget {
+  const _TransferFailureBodyLine(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 27.93,
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        maxLines: 1,
+        softWrap: false,
+        style: const TextStyle(
+          fontSize: 19,
+          height: 1.47,
+          color: Color(0xFF414957),
+        ),
       ),
     ),
   );

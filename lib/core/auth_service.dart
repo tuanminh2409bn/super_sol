@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -69,6 +71,19 @@ class AuthService {
       _firebaseReady = Firebase.apps.isNotEmpty;
     } catch (_) {
       _firebaseReady = false;
+    }
+    if (_firebaseReady) {
+      try {
+        // Firebase initialization and native credential restoration are two
+        // separate steps. Waiting for the first auth event prevents startup
+        // from briefly selecting the guest data scope for a returning user.
+        await FirebaseAuth.instance.authStateChanges().first.timeout(
+          const Duration(seconds: 3),
+        );
+      } on TimeoutException {
+        // Keep Firebase enabled if native restoration is unusually slow. The
+        // auth plugin can still finish restoring its cached user afterward.
+      }
     }
   }
 

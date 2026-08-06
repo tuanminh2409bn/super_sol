@@ -9,9 +9,11 @@ import 'design_canvas.dart';
 import 'transfer_recipient_screen.dart';
 
 const _detailsInk = Color(0xFF141820);
-const _detailsMuted = Color(0xFF717887);
+const _detailsMuted = Color(0xFF626B79);
 const _detailsBlue = Color(0xFF0068F5);
 const _detailsDivider = Color(0xFFF1F4F8);
+const _detailsAccountNumber = Color(0xFF505866);
+const _detailsAccountLogoSize = 52.0;
 
 class AccountDetailsScreen extends StatefulWidget {
   AccountDetailsScreen({
@@ -283,6 +285,11 @@ class _DetailsHeader extends StatelessWidget {
             child: TextButton(
               key: const Key('account-manage'),
               onPressed: onManage,
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               child: const Text(
                 '계좌관리',
                 style: TextStyle(
@@ -352,20 +359,22 @@ class _AccountSummary extends StatelessWidget {
         Positioned(
           left: 28,
           top: 245,
-          width: BankLogoSize.account,
-          height: BankLogoSize.account,
+          width: _detailsAccountLogoSize,
+          height: _detailsAccountLogoSize,
           child: account == null
               ? const Icon(Icons.account_balance_rounded)
               : BankLogo(
+                  key: const Key('account-details-logo'),
                   bankCode: account!.bankCode,
-                  size: BankLogoSize.account,
+                  size: _detailsAccountLogoSize,
                 ),
         ),
         Positioned(
-          left: 98,
-          top: 248,
+          left: 90,
+          top: 243,
           child: Text(
-            account?.accountType ?? '등록된 계좌가 없습니다',
+            key: const Key('account-type-text'),
+            _displayAccountType(account?.accountType),
             style: const TextStyle(
               color: Color(0xFF2D323C),
               fontSize: 22,
@@ -375,8 +384,8 @@ class _AccountSummary extends StatelessWidget {
           ),
         ),
         Positioned(
-          left: 98,
-          top: 291,
+          left: 90,
+          top: 285,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -386,7 +395,7 @@ class _AccountSummary extends StatelessWidget {
                     ? '-'
                     : '${account!.bankDisplayName} ${account!.accountNumber}',
                 style: const TextStyle(
-                  color: Color(0xFF454B57),
+                  color: _detailsAccountNumber,
                   fontSize: 18,
                   letterSpacing: -.5,
                 ),
@@ -412,21 +421,23 @@ class _AccountSummary extends StatelessWidget {
         ),
         Positioned(
           left: 28,
-          top: 339,
+          top: 330,
           child: Text(
+            key: const Key('account-balance-text'),
             '${_formatDetailsMoney(balance)}원',
             style: const TextStyle(
               color: _detailsInk,
               fontSize: 34,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               letterSpacing: -1.5,
             ),
           ),
         ),
         Positioned(
           left: 28,
-          top: 389,
+          top: 381,
           child: Text(
+            key: const Key('account-available-balance-text'),
             '출금가능금액 ${_formatDetailsMoney(balance)}원',
             style: const TextStyle(
               color: _detailsMuted,
@@ -548,26 +559,28 @@ class _AccountCopyPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF454B57)
+      ..color = _detailsAccountNumber
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeJoin = StrokeJoin.round;
+      ..strokeWidth = 1.35
+      ..strokeCap = StrokeCap.square
+      ..strokeJoin = StrokeJoin.miter;
 
-    canvas
-      ..drawRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTWH(4.4, 1.4, 9.1, 9.1),
-          const Radius.circular(.6),
-        ),
-        paint,
-      )
-      ..drawRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTWH(1.5, 4.5, 9.1, 9.1),
-          const Radius.circular(.6),
-        ),
-        paint,
-      );
+    // The source-app glyph is not two complete overlapping rectangles. The
+    // rear sheet is visible only as its upper and right edges, while the front
+    // sheet is a closed square. Keeping those paths separate preserves the
+    // crisp negative space visible in the original mockup at this small size.
+    final rearSheet = Path()
+      ..moveTo(4.65, 1.45)
+      ..lineTo(13.45, 1.45)
+      ..lineTo(13.45, 10.25);
+    canvas.drawPath(rearSheet, paint);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(1.55, 4.55, 8.9, 8.9),
+        const Radius.circular(.35),
+      ),
+      paint,
+    );
   }
 
   @override
@@ -793,7 +806,7 @@ class _TransactionRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: Color(0xFF333A46),
+                color: Color(0xFF27303D),
                 fontSize: 24,
                 fontWeight: FontWeight.w600,
                 letterSpacing: -.8,
@@ -847,6 +860,12 @@ String _formatDetailsMoney(int value) => value.toString().replaceAllMapped(
   RegExp(r'(?<!^)(?=(\d{3})+$)'),
   (_) => ',',
 );
+
+String _displayAccountType(String? value) {
+  if (value == null || value.isEmpty) return '등록된 계좌가 없습니다';
+  if (value.startsWith('금융거래한도계좌2]')) return '[$value';
+  return value;
+}
 
 String _formatDetailsTime(DateTime value) {
   String two(int number) => number.toString().padLeft(2, '0');

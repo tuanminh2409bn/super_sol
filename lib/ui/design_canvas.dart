@@ -11,7 +11,7 @@ Future<void> showDeviceStatusBar({
 }) async {
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
-    overlays: const [SystemUiOverlay.top],
+    overlays: SystemUiOverlay.values,
   );
   final style = darkIcons
       ? SystemUiOverlayStyle.dark
@@ -20,6 +20,12 @@ Future<void> showDeviceStatusBar({
     style.copyWith(
       statusBarColor: backgroundColor,
       systemStatusBarContrastEnforced: false,
+      systemNavigationBarColor: backgroundColor,
+      systemNavigationBarIconBrightness: darkIcons
+          ? Brightness.dark
+          : Brightness.light,
+      systemNavigationBarContrastEnforced: false,
+      systemNavigationBarDividerColor: backgroundColor,
     ),
   );
 }
@@ -57,12 +63,23 @@ class DesignCanvas extends StatelessWidget {
                 child: SizedBox(
                   width: mockupWidth,
                   height: mockupHeight,
-                  child: DefaultTextStyle(
-                    style: const TextStyle(
-                      fontFamily: 'NotoSansKR',
-                      color: Color(0xFF151820),
+                  // Every screen is positioned against the fixed design
+                  // canvas. Respecting Android's system font scale here would
+                  // enlarge only glyphs (not their positioned containers),
+                  // which causes controls such as the recipient edit chip to
+                  // overlap their labels. Keep the canvas typography at its
+                  // mockup size on every device.
+                  child: MediaQuery(
+                    data: MediaQuery.of(
+                      context,
+                    ).copyWith(textScaler: TextScaler.noScaling),
+                    child: DefaultTextStyle(
+                      style: const TextStyle(
+                        fontFamily: 'NotoSansKR',
+                        color: Color(0xFF151820),
+                      ),
+                      child: child,
                     ),
-                    child: child,
                   ),
                 ),
               ),

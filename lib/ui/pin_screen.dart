@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/auth_service.dart';
@@ -80,163 +82,252 @@ class _PinScreenState extends State<PinScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DesignCanvas(
-      child: Stack(
-        children: [
-          const Positioned.fill(child: ColoredBox(color: Colors.white)),
-          Positioned(
-            left: 25,
-            top: 104,
-            width: 48,
-            height: 48,
-            child: IconButton(
-              key: const Key('pin-back'),
-              onPressed: _goBack,
-              padding: EdgeInsets.zero,
-              icon: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                size: 25,
-                color: Color(0xFF303641),
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // DesignCanvas intentionally keeps the 589 × 1280 artwork inside the
+        // Android safe content area. The PIN keypad, however, is a full-bleed
+        // panel in the reference app. Paint its blue surface behind the
+        // canvas so it reaches both screen edges without covering Android's
+        // persistent system navigation bar.
+        final scale = math.min(
+          constraints.maxWidth / mockupWidth,
+          constraints.maxHeight / mockupHeight,
+        );
+        final canvasHeight = mockupHeight * scale;
+        final canvasTop = (constraints.maxHeight - canvasHeight) / 2;
+        final keypadTop = canvasTop + (829 * scale);
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: Colors.white),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: keypadTop,
+              bottom: 0,
+              child: const ColoredBox(color: Color(0xFF005CF9)),
             ),
-          ),
-          const Positioned(
-            left: 100,
-            right: 100,
-            top: 276,
-            height: 110,
-            child: Center(
-              child: Text(
-                '신한인증서 비밀번호를\n입력해주세요',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Color(0xFF11141C),
-                  fontSize: 34,
-                  fontWeight: FontWeight.w700,
-                  height: 1.45,
-                  letterSpacing: -1.7,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 139,
-            top: 422,
-            width: 312,
-            height: 34,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: List.generate(6, (index) {
-                final active = index < _digits.length;
-                final focused = index == _digits.length;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 100),
-                  width: 29,
-                  height: 29,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: active ? const Color(0xFF0567F6) : Colors.white,
-                    border: Border.all(
-                      color: focused
-                          ? const Color(0xFF0071F4)
-                          : const Color(0xFF8B919D),
-                      width: focused ? 3 : 1.5,
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            top: 829,
-            right: 0,
-            bottom: 0,
-            child: ColoredBox(
-              color: const Color(0xFF005CF9),
+            DesignCanvas(
+              backgroundColor: Colors.transparent,
               child: Stack(
                 children: [
-                  _Key(x: 52, y: 10, label: '8', onTap: () => _addDigit(8)),
-                  _Key(x: 248, y: 10, label: '9', onTap: () => _addDigit(9)),
-                  _Key(x: 444, y: 10, label: '7', onTap: () => _addDigit(7)),
-                  _Key(x: 52, y: 100, label: '1', onTap: () => _addDigit(1)),
-                  _Key(x: 248, y: 100, label: '5', onTap: () => _addDigit(5)),
-                  _Key(x: 444, y: 100, label: '0', onTap: () => _addDigit(0)),
-                  _Key(x: 52, y: 190, label: '2', onTap: () => _addDigit(2)),
-                  _Key(x: 248, y: 190, label: '6', onTap: () => _addDigit(6)),
-                  _Key(x: 444, y: 190, label: '4', onTap: () => _addDigit(4)),
-                  _Key(x: 248, y: 280, label: '3', onTap: () => _addDigit(3)),
+                  const Positioned(
+                    left: 0,
+                    top: 0,
+                    right: 0,
+                    height: 829,
+                    child: ColoredBox(color: Colors.white),
+                  ),
                   Positioned(
-                    left: 50,
-                    top: 284,
-                    width: 96,
-                    height: 54,
-                    child: TextButton(
-                      onPressed: _shuffle,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.zero,
+                    left: 25,
+                    top: 104,
+                    width: 48,
+                    height: 48,
+                    child: IconButton(
+                      key: const Key('pin-back'),
+                      onPressed: _goBack,
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 25,
+                        color: Color(0xFF303641),
                       ),
-                      child: const Text(
-                        '재배열',
+                    ),
+                  ),
+                  const Positioned(
+                    left: 100,
+                    right: 100,
+                    top: 276,
+                    height: 110,
+                    child: Center(
+                      child: Text(
+                        '신한인증서 비밀번호를\n입력해주세요',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w500,
-                          shadows: _bluePanelTextStroke,
+                          color: Color(0xFF11141C),
+                          fontSize: 34,
+                          fontWeight: FontWeight.w700,
+                          height: 1.45,
+                          letterSpacing: -1.7,
                         ),
                       ),
                     ),
                   ),
                   Positioned(
-                    left: 457,
-                    top: 285,
-                    width: 67,
-                    height: 51,
-                    child: IconButton(
-                      onPressed: _removeDigit,
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(
-                        Icons.backspace_outlined,
-                        color: Colors.white,
-                        size: 36,
-                      ),
+                    left: 139,
+                    top: 422,
+                    width: 312,
+                    height: 34,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: List.generate(6, (index) {
+                        final active = index < _digits.length;
+                        final focused = index == _digits.length;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 100),
+                          width: 29,
+                          height: 29,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: active
+                                ? const Color(0xFF0567F6)
+                                : Colors.white,
+                            border: Border.all(
+                              color: focused
+                                  ? const Color(0xFF0071F4)
+                                  : const Color(0xFF8B919D),
+                              width: focused ? 3 : 1.5,
+                            ),
+                          ),
+                        );
+                      }),
                     ),
                   ),
                   Positioned(
-                    left: 150,
-                    top: 357,
-                    width: 290,
-                    height: 50,
-                    child: TextButton(
-                      onPressed: _chooseLoginMethod,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.zero,
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '로그인 방법 다시 선택',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: -.3,
-                              shadows: _bluePanelTextStroke,
+                    left: 0,
+                    top: 829,
+                    right: 0,
+                    bottom: 0,
+                    child: Stack(
+                      children: [
+                        _Key(
+                          x: 52,
+                          y: 10,
+                          label: '8',
+                          onTap: () => _addDigit(8),
+                        ),
+                        _Key(
+                          x: 248,
+                          y: 10,
+                          label: '9',
+                          onTap: () => _addDigit(9),
+                        ),
+                        _Key(
+                          x: 444,
+                          y: 10,
+                          label: '7',
+                          onTap: () => _addDigit(7),
+                        ),
+                        _Key(
+                          x: 52,
+                          y: 100,
+                          label: '1',
+                          onTap: () => _addDigit(1),
+                        ),
+                        _Key(
+                          x: 248,
+                          y: 100,
+                          label: '5',
+                          onTap: () => _addDigit(5),
+                        ),
+                        _Key(
+                          x: 444,
+                          y: 100,
+                          label: '0',
+                          onTap: () => _addDigit(0),
+                        ),
+                        _Key(
+                          x: 52,
+                          y: 190,
+                          label: '2',
+                          onTap: () => _addDigit(2),
+                        ),
+                        _Key(
+                          x: 248,
+                          y: 190,
+                          label: '6',
+                          onTap: () => _addDigit(6),
+                        ),
+                        _Key(
+                          x: 444,
+                          y: 190,
+                          label: '4',
+                          onTap: () => _addDigit(4),
+                        ),
+                        _Key(
+                          x: 248,
+                          y: 280,
+                          label: '3',
+                          onTap: () => _addDigit(3),
+                        ),
+                        Positioned(
+                          left: 50,
+                          top: 284,
+                          width: 96,
+                          height: 54,
+                          child: TextButton(
+                            onPressed: _shuffle,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.zero,
+                            ),
+                            child: const Text(
+                              '재배열',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w500,
+                                shadows: _bluePanelTextStroke,
+                              ),
                             ),
                           ),
-                          SizedBox(width: 5),
-                          Icon(Icons.keyboard_arrow_down_rounded, size: 21),
-                        ],
-                      ),
+                        ),
+                        Positioned(
+                          left: 457,
+                          top: 285,
+                          width: 67,
+                          height: 51,
+                          child: IconButton(
+                            onPressed: _removeDigit,
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(
+                              Icons.backspace_outlined,
+                              color: Colors.white,
+                              size: 36,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 150,
+                          top: 357,
+                          width: 290,
+                          height: 50,
+                          child: TextButton(
+                            onPressed: _chooseLoginMethod,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.zero,
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '로그인 방법 다시 선택',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: -.3,
+                                    shadows: _bluePanelTextStroke,
+                                  ),
+                                ),
+                                SizedBox(width: 5),
+                                Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 21,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 }

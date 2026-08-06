@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/app_data.dart';
@@ -14,6 +16,7 @@ const _homeBackground = Color(0xFFF0F3FA);
 const _ink = Color(0xFF151820);
 const _muted = Color(0xFF555D69);
 const _blue = Color(0xFF075FF7);
+const _homeAccountLogoSize = 44.0;
 
 class HomeScreen extends StatefulWidget {
   HomeScreen({
@@ -191,10 +194,16 @@ class _HomeScreenState extends State<HomeScreen> {
         : 'ĐĂNG NHẬP';
     final primaryAccount = widget.dataStore.accounts.firstOrNull;
     final mediaQuery = MediaQuery.of(context);
-    final occupiedBottomInset = mediaQuery.viewPadding.bottom;
-    final canvasScale = mediaQuery.size.width / mockupWidth;
+    final occupiedBottomInset = math.max(
+      mediaQuery.viewPadding.bottom,
+      mediaQuery.systemGestureInsets.bottom,
+    );
+    final canvasScale = math.min(
+      mediaQuery.size.width / mockupWidth,
+      mediaQuery.size.height / mockupHeight,
+    );
     final bottomNavigationLift = occupiedBottomInset > 0
-        ? (occupiedBottomInset / canvasScale) + 10
+        ? occupiedBottomInset / canvasScale
         : 0.0;
     return DesignCanvas(
       backgroundColor: _homeBackground,
@@ -344,39 +353,43 @@ class _AssetHomeContent extends StatelessWidget {
                   ),
                   Positioned(
                     left: 20,
-                    top: 86,
-                    width: BankLogoSize.account,
-                    height: BankLogoSize.account,
+                    top: 90,
+                    width: _homeAccountLogoSize,
+                    height: _homeAccountLogoSize,
                     child: account == null
                         ? const Icon(Icons.account_balance_rounded)
                         : BankLogo(
+                            key: const Key('home-account-logo'),
                             bankCode: account!.bankCode,
-                            size: BankLogoSize.account,
+                            size: _homeAccountLogoSize,
                           ),
                   ),
                   Positioned(
-                    left: 80,
+                    left: 75,
                     top: 82,
                     child: Text(
+                      key: const Key('home-account-type'),
                       account?.accountType ?? '등록된 계좌가 없습니다',
                       style: const TextStyle(
                         fontSize: 18,
-                        color: Color(0xFF505762),
+                        color: Color(0xFF4A5260),
                         fontWeight: FontWeight.w500,
                         letterSpacing: -1,
                       ),
                     ),
                   ),
                   Positioned(
-                    left: 80,
-                    top: 113,
+                    left: 75,
+                    top: 118,
                     child: Text(
+                      key: const Key('home-account-balance'),
                       '${_formatHomeMoney(balance)}원',
                       style: const TextStyle(
                         fontSize: 27,
                         height: 1,
                         color: Color(0xFF222731),
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
+                        fontVariations: [FontVariation('wght', 520)],
                         letterSpacing: -1,
                       ),
                     ),
@@ -981,15 +994,29 @@ class _Header extends StatelessWidget {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onAccountTap,
-              child: Text(
+              child: Text.rich(
                 key: const Key('home-account-name'),
-                accountName == 'ĐĂNG NHẬP' ? accountName : '$accountName님',
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: accountName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontVariations: [FontVariation('wght', 550)],
+                      ),
+                    ),
+                    if (accountName != 'ĐĂNG NHẬP')
+                      const TextSpan(
+                        text: '님',
+                        style: TextStyle(fontWeight: FontWeight.w400),
+                      ),
+                  ],
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 23,
                   color: Color(0xFF11141B),
-                  fontWeight: FontWeight.w600,
                   letterSpacing: -.3,
                 ),
               ),
@@ -1238,13 +1265,13 @@ class _BottomNavigation extends StatelessWidget {
     return Positioned(
       key: const Key('home-bottom-navigation'),
       left: 27,
-      bottom: 35 + bottomLift,
+      bottom: 42 + bottomLift,
       width: 535,
-      height: 98,
+      height: 90,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(49),
+          borderRadius: BorderRadius.circular(45),
           border: Border.all(color: const Color(0xFFE9EDF4)),
           boxShadow: const [
             BoxShadow(

@@ -7,6 +7,7 @@ import 'package:super_sol/core/auth_service.dart';
 import 'package:super_sol/main.dart';
 import 'package:super_sol/ui/account_details_screen.dart';
 import 'package:super_sol/ui/auth_sheet.dart';
+import 'package:super_sol/ui/bank_logo.dart';
 import 'package:super_sol/ui/data_management_screen.dart';
 import 'package:super_sol/ui/home_screen.dart';
 import 'package:super_sol/ui/pin_screen.dart';
@@ -64,9 +65,11 @@ void main() {
     final accountNameFinder = find.byKey(const Key('home-account-name'));
     final accountNameWidget = tester.widget<Text>(accountNameFinder);
     final accountNameContext = tester.element(accountNameFinder);
+    final accountNameSpan = accountNameWidget.textSpan! as TextSpan;
+    final accountNameParts = accountNameSpan.children!.cast<TextSpan>();
     final accountNamePainter = TextPainter(
       text: TextSpan(
-        text: accountNameWidget.data,
+        children: accountNameSpan.children,
         style: DefaultTextStyle.of(
           accountNameContext,
         ).style.merge(accountNameWidget.style),
@@ -76,10 +79,31 @@ void main() {
       textScaler: MediaQuery.textScalerOf(accountNameContext),
     )..layout();
     expect(accountNameWidget.style?.fontSize, 23);
-    expect(accountNameWidget.style?.fontWeight, FontWeight.w600);
+    expect(accountNameParts[0].text, 'TRINHTRUNGMINH');
+    expect(accountNameParts[0].style?.fontWeight, FontWeight.w500);
+    expect(accountNameParts[1].text, '님');
+    expect(accountNameParts[1].style?.fontWeight, FontWeight.w400);
     expect(
       accountNamePainter.width,
       lessThanOrEqualTo(tester.getSize(accountNameFinder).width),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('home-account-logo'))),
+      const Size.square(44),
+    );
+    final accountType = tester.widget<Text>(
+      find.byKey(const Key('home-account-type')),
+    );
+    expect(accountType.style?.color, const Color(0xFF4A5260));
+    final accountBalance = tester.widget<Text>(
+      find.byKey(const Key('home-account-balance')),
+    );
+    expect(accountBalance.style?.fontWeight, FontWeight.w500);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('home-account-balance'))).dy,
+      greaterThan(
+        tester.getBottomLeft(find.byKey(const Key('home-account-type'))).dy,
+      ),
     );
     final benefitTitle = tester.getRect(find.text('땡겨요'));
     final benefitSubtitle = tester.getRect(find.text('할인 쿠폰 드려요'));
@@ -236,9 +260,7 @@ void main() {
     expect(store.accounts, isEmpty);
   });
 
-  testWidgets('a hidden gesture area does not lift the bottom menu', (
-    tester,
-  ) async {
+  testWidgets('a system gesture area lifts the bottom menu', (tester) async {
     _configureMockupViewport(tester);
     await tester.pumpWidget(
       MaterialApp(
@@ -255,7 +277,11 @@ void main() {
     final menuTop = tester
         .getTopLeft(find.byKey(const Key('home-bottom-navigation')))
         .dy;
-    expect(menuTop, 1147);
+    expect(menuTop, 1118);
+    expect(
+      tester.getSize(find.byKey(const Key('home-bottom-navigation'))),
+      const Size(535, 90),
+    );
   });
 
   testWidgets('a visible system navigation area lifts the bottom menu', (
@@ -277,7 +303,7 @@ void main() {
     final menuTop = tester
         .getTopLeft(find.byKey(const Key('home-bottom-navigation')))
         .dy;
-    expect(menuTop, lessThan(1147));
+    expect(menuTop, 1118);
   });
 
   testWidgets('the first Home card opens account details and both exits work', (
@@ -295,6 +321,15 @@ void main() {
     expect(find.byKey(const Key('account-home-glyph')), findsOneWidget);
     expect(find.byKey(const Key('account-scan-icon')), findsOneWidget);
     expect(find.byKey(const Key('account-copy-glyph')), findsOneWidget);
+    expect(find.text('계좌관리'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('account-details-logo'))),
+      const Size.square(52),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const Key('account-type-text'))),
+      const Offset(90, 243),
+    );
     final accountNumberRect = tester.getRect(
       find.byKey(const Key('account-number-text')),
     );
@@ -304,6 +339,24 @@ void main() {
     expect(copyRect.size, const Size.square(15));
     expect(copyRect.left - accountNumberRect.right, closeTo(5, .1));
     expect(copyRect.center.dy, closeTo(accountNumberRect.center.dy, .1));
+    final balanceText = tester.widget<Text>(
+      find.byKey(const Key('account-balance-text')),
+    );
+    final availableBalanceText = tester.widget<Text>(
+      find.byKey(const Key('account-available-balance-text')),
+    );
+    expect(balanceText.style?.fontWeight, FontWeight.w600);
+    expect(availableBalanceText.style?.color, const Color(0xFF626B79));
+    expect(
+      tester.getTopLeft(find.byKey(const Key('account-balance-text'))).dy,
+      330,
+    );
+    expect(
+      tester
+          .getTopLeft(find.byKey(const Key('account-available-balance-text')))
+          .dy,
+      381,
+    );
 
     String? copiedAccountNumber;
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -370,6 +423,33 @@ void main() {
     expect(find.byType(TransferRecipientScreen), findsOneWidget);
     expect(find.byKey(const Key('transfer-multiple')), findsOneWidget);
     expect(find.byKey(const Key('transfer-quick-recipient')), findsOneWidget);
+    expect(find.byKey(const Key('transfer-favorite-label')), findsOneWidget);
+    expect(find.byKey(const Key('transfer-favorite-edit')), findsOneWidget);
+    expect(find.byKey(const Key('transfer-favorite-toggle')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('transfer-favorite-label'))),
+      const Offset(28, 387),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const Key('transfer-own-account-label'))),
+      const Offset(28, 461),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const Key('transfer-recent-label'))),
+      const Offset(28, 535),
+    );
+    final manualEntryLabel = tester.widget<Text>(find.text('계좌번호 직접 입력'));
+    expect(manualEntryLabel.style?.color, const Color(0xFF8A93A4));
+    expect(manualEntryLabel.style?.fontVariations?.single.axis, 'wght');
+    expect(manualEntryLabel.style?.fontVariations?.single.value, 470);
+    final recentCountText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('transfer-recent-recipients-toggle')),
+        matching: find.byType(Text),
+      ),
+    );
+    expect(recentCountText.style?.color, const Color(0xFF303846));
+    expect(recentCountText.style?.fontWeight, FontWeight.w500);
 
     await tester.tap(find.byKey(const Key('transfer-my-accounts-toggle')));
     await tester.pump();
@@ -420,10 +500,24 @@ void main() {
     await tester.tap(find.byKey(const Key('transfer-bank-selector')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('bank-selector-list-banks')), findsOneWidget);
+    final bankTileRect = tester.getRect(find.byKey(const Key('bank-신한')));
+    final bankLogoFrameSize = tester.getSize(
+      find.byKey(const Key('bank-logo-frame-신한')),
+    );
     await tester.tap(find.byKey(const Key('bank-tab-증권사')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('bank-신한투자증권')), findsOneWidget);
     expect(find.byKey(const Key('bank-교보증권')), findsOneWidget);
+    final securitiesTileRect = tester.getRect(
+      find.byKey(const Key('bank-신한투자증권')),
+    );
+    final securitiesLogoFrameSize = tester.getSize(
+      find.byKey(const Key('bank-logo-frame-신한투자증권')),
+    );
+    expect(securitiesTileRect, bankTileRect);
+    expect(bankTileRect.height, 134);
+    expect(securitiesLogoFrameSize, bankLogoFrameSize);
+    expect(securitiesLogoFrameSize, const Size.square(BankLogoSize.picker));
     final shinhanSecurityTile = find.byKey(const Key('bank-신한투자증권'));
     final shinhanSecurityLogo = tester.widget<Image>(
       find.descendant(of: shinhanSecurityTile, matching: find.byType(Image)),
@@ -552,7 +646,9 @@ void main() {
       await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
     }
     await tester.pumpAndSettle();
-    expect(find.text('전화금융사고 및 기타금융사고 등록고객은\n지급거래 불가합니다.'), findsOneWidget);
+    expect(find.text('DEP20180'), findsOneWidget);
+    expect(find.text('전화금융사고 및 기타금융사고 등록고객은 지급거래'), findsOneWidget);
+    expect(find.text('또는 콜센터로 문의해 주시기 바랍니다.'), findsOneWidget);
     expect(find.text('확인'), findsOneWidget);
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(
@@ -568,6 +664,48 @@ void main() {
     await tester.tap(find.byKey(const Key('transfer-failure-home-confirm')));
     await tester.pumpAndSettle();
   });
+
+  testWidgets(
+    'bank and securities selectors keep mockup proportions on Android DPR',
+    (tester) async {
+      const devicePixelRatio = 1.5;
+      tester.view.devicePixelRatio = devicePixelRatio;
+      tester.view.physicalSize = const Size(591, 1280);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        _TestHost(
+          home: TransferRecipientScreen(dataStore: AppDataStore.inMemory()),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('transfer-bank-selector')));
+      await tester.pumpAndSettle();
+
+      final bankTileRect = tester.getRect(find.byKey(const Key('bank-신한')));
+      final bankLogoRect = tester.getRect(
+        find.byKey(const Key('bank-logo-frame-신한')),
+      );
+      expect(bankTileRect.left * devicePixelRatio, closeTo(28, 0.75));
+      expect(
+        bankLogoRect.width * devicePixelRatio,
+        closeTo(BankLogoSize.picker, 0.75),
+      );
+
+      await tester.tap(find.byKey(const Key('bank-tab-증권사')));
+      await tester.pumpAndSettle();
+      final securityTileRect = tester.getRect(
+        find.byKey(const Key('bank-신한투자증권')),
+      );
+      final securityLogoRect = tester.getRect(
+        find.byKey(const Key('bank-logo-frame-신한투자증권')),
+      );
+      expect(securityTileRect, bankTileRect);
+      expect(securityLogoRect.size, bankLogoRect.size);
+    },
+  );
 
   testWidgets('a selected securities logo follows the transfer flow', (
     tester,
@@ -657,6 +795,19 @@ void main() {
     );
     final favoriteStar = tester.widget<Icon>(find.byIcon(Icons.star_rounded));
     expect(favoriteStar.color, const Color(0xFF0969F6));
+    final favoriteCountText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('transfer-favorite-toggle')),
+        matching: find.byType(Text),
+      ),
+    );
+    expect(favoriteCountText.data, '1개');
+    await tester.tap(find.byKey(const Key('transfer-favorite-toggle')));
+    await tester.pump();
+    expect(
+      find.byKey(const Key('favorite-recipient-TRINH TRUN')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const Key('transfer-recipient-search')));
     await tester.pumpAndSettle();
@@ -718,6 +869,68 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('account-key-1')), findsOneWidget);
     expect(find.byKey(const Key('transfer-bank-selector')), findsOneWidget);
+  });
+
+  testWidgets('manual account keypad matches the original spacing and weight', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(_TestHost(home: TransferRecipientScreen()));
+
+    await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+    await tester.pump();
+
+    final one = tester.getCenter(find.byKey(const Key('account-key-1')));
+    final two = tester.getCenter(find.byKey(const Key('account-key-2')));
+    final three = tester.getCenter(find.byKey(const Key('account-key-3')));
+    expect(one.dx, closeTo(98.2, .2));
+    expect(two.dx, closeTo(294.5, .2));
+    expect(three.dx, closeTo(490.8, .2));
+    expect(one.dy, closeTo(832.7, .3));
+    expect(two.dy, closeTo(one.dy, .1));
+    expect(three.dy, closeTo(one.dy, .1));
+
+    final digit = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('account-key-1')),
+        matching: find.text('1'),
+      ),
+    );
+    expect(digit.style?.fontSize, 35);
+    expect(digit.style?.fontWeight, FontWeight.w400);
+    expect(digit.style?.fontVariations?.single.axis, 'wght');
+    expect(digit.style?.fontVariations?.single.value, 400);
+
+    final accountLabel = tester.widget<Text>(find.text('계좌번호'));
+    expect(accountLabel.style?.fontSize, 17);
+    expect(accountLabel.style?.fontWeight, FontWeight.w400);
+    final accountHint = tester.widget<Text>(find.text('- 없이 숫자만 입력'));
+    expect(accountHint.style?.fontSize, 26);
+    expect(find.byKey(const Key('transfer-account-caret')), findsOneWidget);
+    final bankHint = tester.widget<Text>(find.text('은행 또는 증권사 선택'));
+    expect(bankHint.style?.fontSize, 27);
+  });
+
+  testWidgets('bank selection does not show default suggestion chips', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(_TestHost(home: TransferRecipientScreen()));
+
+    await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('transfer-bank-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bank-신한')));
+    await tester.pumpAndSettle();
+    for (final digit in ['1', '0']) {
+      await tester.tap(find.byKey(Key('account-key-$digit')));
+    }
+    await tester.pump();
+
+    expect(find.byKey(const Key('transfer-account-suggestions')), findsNothing);
+    expect(find.text('케이뱅크'), findsNothing);
+    expect(find.text('토스뱅크'), findsNothing);
   });
 
   testWidgets('four account digits show the matching compact suggestion chip', (

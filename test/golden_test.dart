@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:super_sol/core/app_data.dart';
 import 'package:super_sol/core/auth_service.dart';
 import 'package:super_sol/ui/account_details_screen.dart';
 import 'package:super_sol/ui/home_screen.dart';
@@ -180,6 +181,10 @@ void main() {
 
     await tester.tap(find.byKey(const Key('transfer-manual-entry')));
     await tester.pump();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/10_manual_entry_empty.png'),
+    );
     for (final digit in ['1', '0', '0', '2']) {
       await tester.tap(find.byKey(Key('account-key-$digit')));
     }
@@ -256,6 +261,108 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/11_transfer_error.png'),
+    );
+  });
+
+  testWidgets('transfer review matches the named-recipient reference', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    addTearDown(store.dispose);
+    await store.saveAccount(
+      BankAccount(
+        id: 'golden-source-account',
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TRINHTRUNGMINH',
+        accountNumber: '110-628-103680',
+        accountType: '[금융거래한도계좌2]저축예금',
+        openingBalance: 388489,
+        createdAt: DateTime(2026, 7, 22),
+      ),
+    );
+    await store.saveRecipient(
+      const SavedRecipient(
+        id: 'golden-recipient',
+        displayName: '조승도',
+        bankCode: '하나',
+        accountNumber: '65491013364107',
+      ),
+    );
+
+    await tester.pumpWidget(
+      _host(
+        TransferRecipientScreen(
+          dataStore: store,
+          initialPinKeys: const [
+            '3',
+            '2',
+            '7',
+            '5',
+            '6',
+            '8',
+            '9',
+            '1',
+            '0',
+            '4',
+          ],
+        ),
+      ),
+    );
+    await _precache(tester, const [
+      'assets/images/bank_shinhan_transparent.png',
+      'assets/images/bank_hana_transparent.png',
+    ]);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('recipient-조승도')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('amount-key-1')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/13_transfer_review.png'),
+    );
+
+    await tester.tap(find.byKey(const Key('transfer-next')));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/14_transfer_pin.png'),
+    );
+  });
+
+  testWidgets('home transfer failure popup matches the original reference', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final auth = _GoldenAuthService();
+    await tester.pumpWidget(_host(HomeScreen(auth: auth)));
+    await _precache(tester, const [
+      'assets/images/profile_badge.png',
+      'assets/images/shinhan_logo.png',
+      'assets/images/card_usage.png',
+      'assets/images/coupon_tight.png',
+      'assets/images/calendar.png',
+      'assets/images/header_chat.png',
+      'assets/images/header_wallet.png',
+      'assets/images/header_bell.png',
+      'assets/images/header_search.png',
+      'assets/images/tesla.png',
+      'assets/images/point_circle.png',
+      'assets/images/bottom_nav_clean.png',
+    ]);
+    await tester.pumpAndSettle();
+
+    showTransferFailurePopup(tester.element(find.byType(HomeScreen)));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/15_transfer_failure_home.png'),
     );
   });
 }
