@@ -228,11 +228,15 @@ class AppDataStore extends ChangeNotifier {
   final List<BankAccount> _accounts = [];
   final List<LedgerTransaction> _transactions = [];
   final List<SavedRecipient> _recipients = [];
+  int _homeCardMonth = 8;
+  int _homeCardAmount = 6500;
 
   bool get initialized => _initialized;
   List<BankAccount> get accounts =>
       List.unmodifiable(_accounts.where((account) => !account.archived));
   List<SavedRecipient> get recipients => List.unmodifiable(_recipients);
+  int get homeCardMonth => _homeCardMonth;
+  int get homeCardAmount => _homeCardAmount;
 
   Future<void> initialize(String userScope) async {
     if (_initialized && _storageKey == _keyFor(userScope)) return;
@@ -633,6 +637,22 @@ class AppDataStore extends ChangeNotifier {
     await _commit();
   }
 
+  Future<void> updateHomeCardUsage({
+    required int month,
+    required int amount,
+  }) async {
+    _requireInitialized();
+    if (month < 1 || month > 12) {
+      throw ArgumentError('Tháng phải nằm trong khoảng từ 1 đến 12.');
+    }
+    if (amount < 0) {
+      throw ArgumentError('Số tiền không được âm.');
+    }
+    _homeCardMonth = month;
+    _homeCardAmount = amount;
+    await _commit();
+  }
+
   Future<void> _normalizeTransactionOrder() async {
     for (final account in _accounts) {
       final ordered = transactionsFor(account.id);
@@ -714,6 +734,8 @@ class AppDataStore extends ChangeNotifier {
       ..addAll(decodedRecipients);
     _idSequence = (json['idSequence'] as num?)?.toInt() ?? 0;
     _updatedAtMicros = (json['updatedAtMicros'] as num?)?.toInt() ?? 0;
+    _homeCardMonth = (json['homeCardMonth'] as num?)?.toInt() ?? 8;
+    _homeCardAmount = (json['homeCardAmount'] as num?)?.toInt() ?? 6500;
   }
 
   Map<String, Object?> _snapshot() => {
@@ -723,6 +745,8 @@ class AppDataStore extends ChangeNotifier {
     'accounts': _accounts.map((item) => item.toJson()).toList(),
     'transactions': _transactions.map((item) => item.toJson()).toList(),
     'recipients': _recipients.map((item) => item.toJson()).toList(),
+    'homeCardMonth': _homeCardMonth,
+    'homeCardAmount': _homeCardAmount,
   };
 
   void _addMockData() {

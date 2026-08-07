@@ -228,6 +228,45 @@ void main() {
     );
   });
 
+  testWidgets('home card usage can be edited and remains in the store', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: true);
+    final auth = _SignedInAuthService();
+
+    await tester.pumpWidget(
+      _TestHost(
+        home: HomeScreen(auth: auth, dataStore: store),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('8월 이용 금액 6,500원'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('home-card-usage-edit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('home-card-month-field')), '9');
+    await tester.enterText(
+      find.byKey(const Key('home-card-amount-field')),
+      '123456',
+    );
+    await tester.tap(find.byKey(const Key('home-card-usage-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('9월 이용 금액 123,456원'), findsOneWidget);
+    expect(store.homeCardMonth, 9);
+    expect(store.homeCardAmount, 123456);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      _TestHost(
+        home: HomeScreen(auth: auth, dataStore: store),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('9월 이용 금액 123,456원'), findsOneWidget);
+  });
+
   testWidgets('the logout button at the end of Home signs out', (tester) async {
     _configureMockupViewport(tester);
     SharedPreferences.setMockInitialValues({});

@@ -29,7 +29,7 @@ enum TransferFlowResult { failed }
 Future<void> showTransferFailurePopup(BuildContext context) {
   return showDialog<void>(
     context: context,
-    barrierColor: const Color(0xC7F4F6FA),
+    barrierColor: const Color(0x8A000000),
     builder: (_) => const _TransferFailurePopup(),
   );
 }
@@ -2303,14 +2303,20 @@ class _TransferDetailRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       SizedBox(
-        width: 111,
+        width: 145,
         child: Text(
           label,
           style: const TextStyle(
-            fontSize: 18,
-            color: Color(0xFF4F5662),
-            fontWeight: FontWeight.w400,
+            // The reference uses a medium, cool-gray label. The prior
+            // regular weight rendered too pale on physical Android devices.
+            fontSize: 22,
+            color: Color(0xFF303846),
+            fontWeight: FontWeight.w800,
+            fontVariations: [FontVariation('wght', 780)],
+            letterSpacing: -.35,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.clip,
         ),
       ),
       Expanded(
@@ -2494,59 +2500,85 @@ class _TransferFailurePopup extends StatelessWidget {
   const _TransferFailurePopup();
 
   @override
-  Widget build(BuildContext context) => Dialog(
-    elevation: 2,
-    shadowColor: const Color(0x18000000),
-    backgroundColor: Colors.white,
-    insetPadding: const EdgeInsets.symmetric(horizontal: 34),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-    child: SizedBox(
-      height: 337,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(27, 45, 27, 26),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'DEP20180',
-              style: TextStyle(
-                fontSize: 18,
-                height: 1.25,
-                color: Color(0xFFFF5C73),
-              ),
+  Widget build(BuildContext context) {
+    final viewport = MediaQuery.sizeOf(context);
+    final scale = min(
+      viewport.width / mockupWidth,
+      viewport.height / mockupHeight,
+    );
+
+    return Center(
+      child: SizedBox(
+        width: 523 * scale,
+        height: 336 * scale,
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: Material(
+            elevation: 2,
+            shadowColor: const Color(0x18000000),
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
             ),
-            const SizedBox(height: 14.5),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _TransferFailureBodyLine('전화금융사고 및 기타금융사고 등록고객은 지급거래'),
-                _TransferFailureBodyLine('불가합니다. 고객사고 정보 확인후 거래하세요.'),
-                _TransferFailureBodyLine('고객사고 등록으로 거래가 불가합니다. 신한은행 영업점'),
-                _TransferFailureBodyLine('또는 콜센터로 문의해 주시기 바랍니다.'),
-              ],
-            ),
-            const Spacer(),
-            FilledButton(
-              key: const Key('transfer-failure-home-confirm'),
-              onPressed: () => Navigator.of(context).pop(),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF035CF8),
-                minimumSize: const Size.fromHeight(67),
-                maximumSize: const Size.fromHeight(67),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              width: 523,
+              height: 336,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(27, 45, 27, 26),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'DEP20180',
+                      style: TextStyle(
+                        fontSize: 20.5,
+                        height: 1.38,
+                        color: Color(0xFFFF5C73),
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: -.45,
+                      ),
+                    ),
+                    const SizedBox(height: 14.5),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _TransferFailureBodyLine('전화금융사고 및 기타금융사고 등록고객은 지급거래'),
+                        _TransferFailureBodyLine('불가합니다. 고객사고 정보 확인후 거래하세요.'),
+                        _TransferFailureBodyLine(
+                          '고객사고 등록으로 거래가 불가합니다. 신한은행 영업점',
+                        ),
+                        _TransferFailureBodyLine('또는 콜센터로 문의해 주시기 바랍니다.'),
+                      ],
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      key: const Key('transfer-failure-home-confirm'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF035CF8),
+                        minimumSize: const Size.fromHeight(67),
+                        maximumSize: const Size.fromHeight(67),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        '확인',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: const Text(
-                '확인',
-                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
-              ),
             ),
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _TransferFailureBodyLine extends StatelessWidget {
@@ -2556,7 +2588,7 @@ class _TransferFailureBodyLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 27.93,
+    height: 28.5,
     child: FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
@@ -2565,9 +2597,11 @@ class _TransferFailureBodyLine extends StatelessWidget {
         maxLines: 1,
         softWrap: false,
         style: const TextStyle(
-          fontSize: 19,
-          height: 1.47,
+          fontSize: 20.5,
+          height: 1.38,
           color: Color(0xFF414957),
+          fontWeight: FontWeight.w400,
+          letterSpacing: -.45,
         ),
       ),
     ),

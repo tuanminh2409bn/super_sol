@@ -51,7 +51,7 @@ void main() {
     await _precache(tester, const [
       'assets/images/profile_badge.png',
       'assets/images/shinhan_logo.png',
-      'assets/images/card_usage.png',
+      'assets/images/home_sol_global_card.png',
       'assets/images/coupon_tight.png',
       'assets/images/calendar.png',
       'assets/images/header_chat.png',
@@ -344,7 +344,7 @@ void main() {
     await _precache(tester, const [
       'assets/images/profile_badge.png',
       'assets/images/shinhan_logo.png',
-      'assets/images/card_usage.png',
+      'assets/images/home_sol_global_card.png',
       'assets/images/coupon_tight.png',
       'assets/images/calendar.png',
       'assets/images/header_chat.png',

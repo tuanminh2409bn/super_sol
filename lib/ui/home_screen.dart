@@ -176,6 +176,22 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _editHomeCardUsage() async {
+    final draft = await showDialog<_HomeCardUsageDraft>(
+      context: context,
+      barrierColor: const Color(0x73000000),
+      builder: (_) => _HomeCardUsageDialog(
+        initialMonth: widget.dataStore.homeCardMonth,
+        initialAmount: widget.dataStore.homeCardAmount,
+      ),
+    );
+    if (draft == null) return;
+    await widget.dataStore.updateHomeCardUsage(
+      month: draft.month,
+      amount: draft.amount,
+    );
+  }
+
   Future<void> _logout() async {
     await widget.auth.signOut();
     await initializeUserData(widget.auth, store: widget.dataStore);
@@ -228,6 +244,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           : widget.dataStore.balanceFor(primaryAccount.id),
                       onOpenDetails: _openAccountDetails,
                       onTransfer: _openTransferRecipient,
+                      cardMonth: widget.dataStore.homeCardMonth,
+                      cardAmount: widget.dataStore.homeCardAmount,
+                      onEditCardUsage: _editHomeCardUsage,
                     ),
                     const Positioned(
                       left: 0,
@@ -305,6 +324,9 @@ class _AssetHomeContent extends StatelessWidget {
     required this.balance,
     required this.onOpenDetails,
     required this.onTransfer,
+    required this.cardMonth,
+    required this.cardAmount,
+    required this.onEditCardUsage,
   });
 
   final String accountName;
@@ -312,6 +334,9 @@ class _AssetHomeContent extends StatelessWidget {
   final int balance;
   final VoidCallback onOpenDetails;
   final VoidCallback onTransfer;
+  final int cardMonth;
+  final int cardAmount;
+  final VoidCallback onEditCardUsage;
 
   @override
   Widget build(BuildContext context) {
@@ -457,26 +482,59 @@ class _AssetHomeContent extends StatelessWidget {
           child: _WhiteCard(
             child: Stack(
               children: [
-                const Positioned(
-                  left: 23,
-                  top: 26,
+                Positioned(
+                  left: 12,
+                  top: 3,
                   width: 52,
-                  height: 52,
-                  child: Image(
-                    image: AssetImage('assets/images/card_usage.png'),
-                    fit: BoxFit.fill,
+                  height: 80,
+                  child: ClipRect(
+                    child: Transform.scale(
+                      scale: 1.08,
+                      child: const Image(
+                        key: Key('home-card-logo'),
+                        image: AssetImage(
+                          'assets/images/home_sol_global_card.png',
+                        ),
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
                 ),
-                const Positioned(
-                  left: 84,
-                  top: 47,
-                  child: Text(
-                    '7월 이용 금액 0원',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Color(0xFF59616D),
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: -.7,
+                Positioned(
+                  left: 64,
+                  top: 24,
+                  right: 24,
+                  height: 63,
+                  child: GestureDetector(
+                    key: const Key('home-card-usage-edit'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onEditCardUsage,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'SOL글로벌 체크(즉발)',
+                          style: TextStyle(
+                            fontSize: 25,
+                            height: 1,
+                            color: Color(0xFF303641),
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -1.05,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '$cardMonth월 이용 금액 ${_formatHomeMoney(cardAmount)}원',
+                          key: const Key('home-card-usage-value'),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            height: 1.25,
+                            color: Color(0xFF626B7A),
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: -.7,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -508,7 +566,7 @@ class _AssetHomeContent extends StatelessWidget {
         ),
         Positioned(
           left: 17,
-          top: 650,
+          top: 640,
           width: 555,
           height: 243,
           child: _WhiteCard(
@@ -618,7 +676,7 @@ class _AssetHomeContent extends StatelessWidget {
         ),
         Positioned(
           left: 17,
-          top: 909,
+          top: 899,
           width: 555,
           height: 179,
           child: _WhiteCard(
@@ -1389,6 +1447,130 @@ const _footerText = TextStyle(
   fontSize: 18,
   fontWeight: FontWeight.w600,
 );
+
+class _HomeCardUsageDraft {
+  const _HomeCardUsageDraft({required this.month, required this.amount});
+
+  final int month;
+  final int amount;
+}
+
+class _HomeCardUsageDialog extends StatefulWidget {
+  const _HomeCardUsageDialog({
+    required this.initialMonth,
+    required this.initialAmount,
+  });
+
+  final int initialMonth;
+  final int initialAmount;
+
+  @override
+  State<_HomeCardUsageDialog> createState() => _HomeCardUsageDialogState();
+}
+
+class _HomeCardUsageDialogState extends State<_HomeCardUsageDialog> {
+  late final TextEditingController _monthController;
+  late final TextEditingController _amountController;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _monthController = TextEditingController(
+      text: widget.initialMonth.toString(),
+    );
+    _amountController = TextEditingController(
+      text: _formatHomeMoney(widget.initialAmount),
+    );
+  }
+
+  @override
+  void dispose() {
+    _monthController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final month = int.tryParse(
+      _monthController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+    );
+    final amount = int.tryParse(
+      _amountController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+    );
+    if (month == null || month < 1 || month > 12) {
+      setState(() => _error = 'Tháng phải nằm trong khoảng từ 1 đến 12.');
+      return;
+    }
+    if (amount == null || amount < 0) {
+      setState(() => _error = 'Số tiền phải là số hợp lệ từ 0 trở lên.');
+      return;
+    }
+    Navigator.of(
+      context,
+    ).pop(_HomeCardUsageDraft(month: month, amount: amount));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      title: const Text(
+        'Chỉnh thông tin thẻ',
+        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const Key('home-card-month-field'),
+            controller: _monthController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Tháng hiển thị',
+              suffixText: '월',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            key: const Key('home-card-amount-field'),
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Số tiền sử dụng',
+              suffixText: '원',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              key: const Key('home-card-usage-error'),
+              style: const TextStyle(color: Color(0xFFD92D45), fontSize: 13),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          key: const Key('home-card-usage-save'),
+          onPressed: _save,
+          style: FilledButton.styleFrom(backgroundColor: _blue),
+          child: const Text('Lưu'),
+        ),
+      ],
+    );
+  }
+}
 
 String _formatHomeMoney(int value) => value.toString().replaceAllMapped(
   RegExp(r'(?<!^)(?=(\d{3})+$)'),

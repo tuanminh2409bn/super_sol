@@ -265,6 +265,36 @@ void main() {
     },
   );
 
+  test('home card month and amount persist for the signed-in user', () async {
+    SharedPreferences.setMockInitialValues({});
+    final first = AppDataStore();
+    await first.initialize('home-card-user');
+
+    expect(first.homeCardMonth, 8);
+    expect(first.homeCardAmount, 6500);
+    await first.updateHomeCardUsage(month: 9, amount: 123456);
+
+    final reloaded = AppDataStore();
+    await reloaded.initialize('home-card-user');
+    expect(reloaded.homeCardMonth, 9);
+    expect(reloaded.homeCardAmount, 123456);
+  });
+
+  test('home card rejects invalid month and negative amount', () async {
+    final store = AppDataStore.inMemory(withMockData: false);
+
+    await expectLater(
+      store.updateHomeCardUsage(month: 0, amount: 1000),
+      throwsArgumentError,
+    );
+    await expectLater(
+      store.updateHomeCardUsage(month: 8, amount: -1),
+      throwsArgumentError,
+    );
+    expect(store.homeCardMonth, 8);
+    expect(store.homeCardAmount, 6500);
+  });
+
   test('corrupted local data recovers to an empty valid state', () async {
     SharedPreferences.setMockInitialValues({
       'super_sol_app_data_v2-Z3Vlc3Q=': '{not-valid-json',
