@@ -1456,8 +1456,14 @@ class _AmountPage extends StatelessWidget {
               ),
               const SizedBox(height: 5),
               Text(
+                key: const Key('amount-recipient-account'),
                 '$bank $account',
-                style: const TextStyle(fontSize: 18, color: _muted),
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Color(0xFF505866),
+                  fontWeight: FontWeight.w500,
+                  fontVariations: [FontVariation('wght', 500)],
+                ),
               ),
             ],
           ),
@@ -1480,16 +1486,22 @@ class _AmountPage extends StatelessWidget {
               Text.rich(
                 key: const Key('amount-available-balance'),
                 TextSpan(
-                  style: const TextStyle(fontSize: 19, color: _muted),
+                  style: const TextStyle(
+                    fontSize: 19,
+                    color: Color(0xFF505866),
+                    fontWeight: FontWeight.w500,
+                    fontVariations: [FontVariation('wght', 500)],
+                  ),
                   children: [
                     const TextSpan(text: '출금가능금액 '),
                     TextSpan(
                       text: '${_formatted(sourceAccount.availableBalance)}원',
                       style: const TextStyle(
-                        color: _ink,
+                        color: Color(0xFF505866),
                         fontWeight: FontWeight.w500,
+                        fontVariations: [FontVariation('wght', 500)],
                         decoration: TextDecoration.underline,
-                        decorationColor: _ink,
+                        decorationColor: Color(0xFF505866),
                         decorationThickness: 1.4,
                         decorationStyle: TextDecorationStyle.solid,
                       ),
@@ -2529,12 +2541,14 @@ class _TransferFailurePopup extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Text(
+                      key: Key('transfer-failure-code'),
                       'DEP20180',
                       style: TextStyle(
                         fontSize: 20.5,
                         height: 1.38,
-                        color: Color(0xFFFF5C73),
-                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF505866),
+                        fontWeight: FontWeight.w500,
+                        fontVariations: [FontVariation('wght', 500)],
                         letterSpacing: -.45,
                       ),
                     ),
@@ -2593,14 +2607,16 @@ class _TransferFailureBodyLine extends StatelessWidget {
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
       child: Text(
+        key: Key('transfer-failure-body-$text'),
         text,
         maxLines: 1,
         softWrap: false,
         style: const TextStyle(
           fontSize: 20.5,
           height: 1.38,
-          color: Color(0xFF414957),
-          fontWeight: FontWeight.w400,
+          color: Color(0xFF505866),
+          fontWeight: FontWeight.w500,
+          fontVariations: [FontVariation('wght', 500)],
           letterSpacing: -.45,
         ),
       ),

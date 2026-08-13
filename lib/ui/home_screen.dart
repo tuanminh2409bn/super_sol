@@ -15,6 +15,7 @@ import 'transfer_recipient_screen.dart';
 const _homeBackground = Color(0xFFF0F3FA);
 const _ink = Color(0xFF151820);
 const _muted = Color(0xFF555D69);
+const _homeSecondary = Color(0xFF505866);
 const _blue = Color(0xFF075FF7);
 const _homeAccountLogoSize = 44.0;
 
@@ -397,8 +398,9 @@ class _AssetHomeContent extends StatelessWidget {
                       account?.accountType ?? '등록된 계좌가 없습니다',
                       style: const TextStyle(
                         fontSize: 18,
-                        color: Color(0xFF4A5260),
+                        color: _homeSecondary,
                         fontWeight: FontWeight.w500,
+                        fontVariations: [FontVariation('wght', 500)],
                         letterSpacing: -1,
                       ),
                     ),
@@ -529,8 +531,9 @@ class _AssetHomeContent extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 18,
                             height: 1.25,
-                            color: Color(0xFF626B7A),
+                            color: _homeSecondary,
                             fontWeight: FontWeight.w500,
+                            fontVariations: [FontVariation('wght', 500)],
                             letterSpacing: -.7,
                           ),
                         ),
@@ -608,11 +611,13 @@ class _AssetHomeContent extends StatelessWidget {
                   left: 85,
                   top: 77,
                   child: Text(
+                    key: Key('home-benefit-subtitle'),
                     '할인 쿠폰 드려요',
                     style: TextStyle(
                       fontSize: 17,
-                      color: _muted,
+                      color: _homeSecondary,
                       fontWeight: FontWeight.w500,
+                      fontVariations: [FontVariation('wght', 500)],
                     ),
                   ),
                 ),
@@ -728,11 +733,13 @@ class _AssetHomeContent extends StatelessWidget {
                   left: 84,
                   top: 82,
                   child: Text(
+                    key: Key('home-spending-subtitle'),
                     '오늘 쓴 돈',
                     style: TextStyle(
                       fontSize: 17,
-                      color: _muted,
+                      color: _homeSecondary,
                       fontWeight: FontWeight.w500,
+                      fontVariations: [FontVariation('wght', 500)],
                     ),
                   ),
                 ),
@@ -1383,7 +1390,7 @@ class _BottomNavigationItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? const Color(0xFF0874EF) : const Color(0xFF646C7A);
+    final color = selected ? const Color(0xFF0874EF) : _homeSecondary;
     return SizedBox(
       width: 78,
       child: Column(
@@ -1395,12 +1402,16 @@ class _BottomNavigationItem extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
+            key: Key('home-bottom-label-$label'),
             label,
             style: TextStyle(
               color: color,
               fontSize: 15,
               height: 1,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              fontVariations: selected
+                  ? null
+                  : const [FontVariation('wght', 500)],
               letterSpacing: -.6,
             ),
           ),

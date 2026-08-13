@@ -91,7 +91,25 @@ void main() {
     final accountType = tester.widget<Text>(
       find.byKey(const Key('home-account-type')),
     );
-    expect(accountType.style?.color, const Color(0xFF4A5260));
+    expect(accountType.style?.color, const Color(0xFF505866));
+    expect(accountType.style?.fontWeight, FontWeight.w500);
+    expect(accountType.style?.fontVariations, const [
+      FontVariation('wght', 500),
+    ]);
+    final homeSecondaryLabels = <Text>[
+      tester.widget(find.byKey(const Key('home-card-usage-value'))),
+      tester.widget(find.byKey(const Key('home-benefit-subtitle'))),
+      tester.widget(find.byKey(const Key('home-spending-subtitle'))),
+      for (final label in ['금융', '상품', '혜택', '주식'])
+        tester.widget(find.byKey(Key('home-bottom-label-$label'))),
+    ];
+    for (final secondaryText in homeSecondaryLabels) {
+      expect(secondaryText.style?.color, const Color(0xFF505866));
+      expect(secondaryText.style?.fontWeight, FontWeight.w500);
+      expect(secondaryText.style?.fontVariations, const [
+        FontVariation('wght', 500),
+      ]);
+    }
     final accountBalance = tester.widget<Text>(
       find.byKey(const Key('home-account-balance')),
     );
@@ -436,13 +454,18 @@ void main() {
       find.byKey(const Key('account-available-balance-text')),
     );
     expect(balanceText.style?.fontWeight, FontWeight.w600);
-    expect(availableBalanceText.style?.color, const Color(0xFF626B79));
-    expect(availableBalanceText.style?.fontWeight, isNull);
-    expect(availableBalanceText.style?.fontVariations, isNull);
+    expect(availableBalanceText.style?.color, const Color(0xFF505866));
+    expect(availableBalanceText.style?.fontWeight, FontWeight.w500);
+    expect(availableBalanceText.style?.fontVariations, const [
+      FontVariation('wght', 500),
+    ]);
     final accountNumberText = tester.widget<Text>(
       find.byKey(const Key('account-number-text')),
     );
-    expect(accountNumberText.style?.fontWeight, isNull);
+    expect(accountNumberText.style?.fontWeight, FontWeight.w500);
+    expect(accountNumberText.style?.fontVariations, const [
+      FontVariation('wght', 500),
+    ]);
     final transactionDate = tester.widget<Text>(
       find.byKey(const Key('account-transaction-date-2026-7-22')),
     );
@@ -459,9 +482,11 @@ void main() {
         FontVariation('wght', 500),
       ]);
     }
-    expect(transactionBalance.style?.color, const Color(0xFF626B79));
-    expect(transactionBalance.style?.fontWeight, isNull);
-    expect(transactionBalance.style?.fontVariations, isNull);
+    expect(transactionBalance.style?.color, const Color(0xFF505866));
+    expect(transactionBalance.style?.fontWeight, FontWeight.w500);
+    expect(transactionBalance.style?.fontVariations, const [
+      FontVariation('wght', 500),
+    ]);
     expect(
       tester.getTopLeft(find.byKey(const Key('account-balance-text'))).dy,
       330,
@@ -690,6 +715,24 @@ void main() {
     await tester.pump();
     expect(find.text('1원'), findsOneWidget);
     expect(find.byKey(const Key('amount-available-balance')), findsOneWidget);
+    final amountRecipientAccount = tester.widget<Text>(
+      find.byKey(const Key('amount-recipient-account')),
+    );
+    final amountAvailableBalance = tester.widget<Text>(
+      find.byKey(const Key('amount-available-balance')),
+    );
+    final amountAvailableSpan = amountAvailableBalance.textSpan! as TextSpan;
+    final amountAvailableValueSpan =
+        amountAvailableSpan.children!.last as TextSpan;
+    for (final secondaryStyle in [
+      amountRecipientAccount.style!,
+      amountAvailableSpan.style!,
+      amountAvailableValueSpan.style!,
+    ]) {
+      expect(secondaryStyle.color, const Color(0xFF505866));
+      expect(secondaryStyle.fontWeight, FontWeight.w500);
+      expect(secondaryStyle.fontVariations, const [FontVariation('wght', 500)]);
+    }
     await tester.tap(find.byKey(const Key('amount-key-00')));
     await tester.pump();
     expect(find.text('100원'), findsOneWidget);
@@ -765,6 +808,23 @@ void main() {
     expect(find.text('전화금융사고 및 기타금융사고 등록고객은 지급거래'), findsOneWidget);
     expect(find.text('또는 콜센터로 문의해 주시기 바랍니다.'), findsOneWidget);
     expect(find.text('확인'), findsOneWidget);
+    final failureTexts = <Text>[
+      tester.widget(find.byKey(const Key('transfer-failure-code'))),
+      for (final body in [
+        '전화금융사고 및 기타금융사고 등록고객은 지급거래',
+        '불가합니다. 고객사고 정보 확인후 거래하세요.',
+        '고객사고 등록으로 거래가 불가합니다. 신한은행 영업점',
+        '또는 콜센터로 문의해 주시기 바랍니다.',
+      ])
+        tester.widget(find.byKey(Key('transfer-failure-body-$body'))),
+    ];
+    for (final failureText in failureTexts) {
+      expect(failureText.style?.color, const Color(0xFF505866));
+      expect(failureText.style?.fontWeight, FontWeight.w500);
+      expect(failureText.style?.fontVariations, const [
+        FontVariation('wght', 500),
+      ]);
+    }
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(
       AppDataStore.shared.balanceFor(AppDataStore.shared.accounts.first.id),

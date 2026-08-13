@@ -398,6 +398,8 @@ class _AccountSummary extends StatelessWidget {
                 style: const TextStyle(
                   color: _detailsAccountNumber,
                   fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  fontVariations: [FontVariation('wght', 500)],
                   letterSpacing: -.5,
                 ),
               ),
@@ -441,8 +443,10 @@ class _AccountSummary extends StatelessWidget {
             key: const Key('account-available-balance-text'),
             '출금가능금액 ${_formatDetailsMoney(balance)}원',
             style: const TextStyle(
-              color: _detailsMuted,
+              color: _detailsSecondary,
               fontSize: 18,
+              fontWeight: FontWeight.w500,
+              fontVariations: [FontVariation('wght', 500)],
               letterSpacing: -.5,
             ),
           ),
@@ -855,8 +859,10 @@ class _TransactionRow extends StatelessWidget {
               key: Key('account-transaction-balance-$transactionId'),
               balance,
               style: const TextStyle(
-                color: _detailsMuted,
+                color: _detailsSecondary,
                 fontSize: 18,
+                fontWeight: FontWeight.w500,
+                fontVariations: [FontVariation('wght', 500)],
                 letterSpacing: -.5,
               ),
             ),
