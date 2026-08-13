@@ -1028,7 +1028,7 @@ class _Header extends StatelessWidget {
       left: 28,
       right: 25,
       top: 115,
-      height: 55,
+      height: 65,
       child: Stack(
         children: [
           Positioned(
@@ -1047,8 +1047,8 @@ class _Header extends StatelessWidget {
           Positioned(
             left: 38,
             top: 3,
-            width: 350,
-            height: 38,
+            width: 285,
+            height: 60,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onAccountTap,
@@ -1070,8 +1070,8 @@ class _Header extends StatelessWidget {
                       ),
                   ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                overflow: TextOverflow.clip,
                 style: const TextStyle(
                   fontSize: 23,
                   color: Color(0xFF11141B),

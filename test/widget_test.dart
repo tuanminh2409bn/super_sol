@@ -74,19 +74,16 @@ void main() {
           accountNameContext,
         ).style.merge(accountNameWidget.style),
       ),
-      maxLines: 1,
+      maxLines: accountNameWidget.maxLines,
       textDirection: TextDirection.ltr,
       textScaler: MediaQuery.textScalerOf(accountNameContext),
-    )..layout();
+    )..layout(maxWidth: tester.getSize(accountNameFinder).width);
     expect(accountNameWidget.style?.fontSize, 23);
     expect(accountNameParts[0].text, 'TRINHTRUNGMINH');
     expect(accountNameParts[0].style?.fontWeight, FontWeight.w500);
     expect(accountNameParts[1].text, '님');
     expect(accountNameParts[1].style?.fontWeight, FontWeight.w400);
-    expect(
-      accountNamePainter.width,
-      lessThanOrEqualTo(tester.getSize(accountNameFinder).width),
-    );
+    expect(accountNamePainter.didExceedMaxLines, isFalse);
     expect(
       tester.getSize(find.byKey(const Key('home-account-logo'))),
       const Size.square(44),
@@ -122,6 +119,56 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-switch')), findsNothing);
+  });
+
+  testWidgets('long home account name wraps fully before the header icons', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(
+      _TestHost(
+        home: HomeScreen(
+          auth: _SignedInAuthService(name: 'NGUYEN HUYNH XUAN MAI'),
+        ),
+      ),
+    );
+
+    final nameFinder = find.byKey(const Key('home-account-name'));
+    final nameWidget = tester.widget<Text>(nameFinder);
+    final nameContext = tester.element(nameFinder);
+    final nameSpan = nameWidget.textSpan! as TextSpan;
+    final namePainter = TextPainter(
+      text: TextSpan(
+        children: nameSpan.children,
+        style: DefaultTextStyle.of(nameContext).style.merge(nameWidget.style),
+      ),
+      maxLines: nameWidget.maxLines,
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(nameContext),
+    )..layout(maxWidth: tester.getSize(nameFinder).width);
+
+    expect(find.text('NGUYEN HUYNH XUAN MAI님'), findsOneWidget);
+    expect(nameWidget.maxLines, 2);
+    expect(nameWidget.overflow, TextOverflow.clip);
+    expect(namePainter.computeLineMetrics(), hasLength(2));
+    expect(namePainter.didExceedMaxLines, isFalse);
+    final firstLine = namePainter.getLineBoundary(
+      const TextPosition(offset: 0),
+    );
+    expect(
+      nameSpan.toPlainText().substring(firstLine.start, firstLine.end).trim(),
+      'NGUYEN HUYNH',
+    );
+    expect(
+      tester.getTopRight(nameFinder).dx,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.image(const AssetImage('assets/images/header_chat.png')),
+            )
+            .dx,
+      ),
+    );
   });
 
   testWidgets('successful authentication closes a sheet without a Scaffold', (
