@@ -152,6 +152,10 @@ void main() {
     expect(nameWidget.overflow, TextOverflow.clip);
     expect(namePainter.computeLineMetrics(), hasLength(2));
     expect(namePainter.didExceedMaxLines, isFalse);
+    expect(
+      namePainter.height,
+      lessThanOrEqualTo(tester.getSize(nameFinder).height),
+    );
     final firstLine = namePainter.getLineBoundary(
       const TextPosition(offset: 0),
     );
@@ -433,6 +437,31 @@ void main() {
     );
     expect(balanceText.style?.fontWeight, FontWeight.w600);
     expect(availableBalanceText.style?.color, const Color(0xFF626B79));
+    expect(availableBalanceText.style?.fontWeight, isNull);
+    expect(availableBalanceText.style?.fontVariations, isNull);
+    final accountNumberText = tester.widget<Text>(
+      find.byKey(const Key('account-number-text')),
+    );
+    expect(accountNumberText.style?.fontWeight, isNull);
+    final transactionDate = tester.widget<Text>(
+      find.byKey(const Key('account-transaction-date-2026-7-22')),
+    );
+    final transactionTime = tester.widget<Text>(
+      find.byKey(const Key('account-transaction-time-seed-transaction-0')),
+    );
+    final transactionBalance = tester.widget<Text>(
+      find.byKey(const Key('account-transaction-balance-seed-transaction-0')),
+    );
+    for (final secondaryText in [transactionDate, transactionTime]) {
+      expect(secondaryText.style?.color, const Color(0xFF505866));
+      expect(secondaryText.style?.fontWeight, FontWeight.w500);
+      expect(secondaryText.style?.fontVariations, const [
+        FontVariation('wght', 500),
+      ]);
+    }
+    expect(transactionBalance.style?.color, const Color(0xFF626B79));
+    expect(transactionBalance.style?.fontWeight, isNull);
+    expect(transactionBalance.style?.fontVariations, isNull);
     expect(
       tester.getTopLeft(find.byKey(const Key('account-balance-text'))).dy,
       330,

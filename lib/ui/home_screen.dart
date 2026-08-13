@@ -1028,7 +1028,7 @@ class _Header extends StatelessWidget {
       left: 28,
       right: 25,
       top: 115,
-      height: 65,
+      height: 70,
       child: Stack(
         children: [
           Positioned(
@@ -1048,7 +1048,7 @@ class _Header extends StatelessWidget {
             left: 38,
             top: 3,
             width: 285,
-            height: 60,
+            height: 67,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onAccountTap,

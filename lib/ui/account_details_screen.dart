@@ -10,6 +10,7 @@ import 'transfer_recipient_screen.dart';
 
 const _detailsInk = Color(0xFF141820);
 const _detailsMuted = Color(0xFF626B79);
+const _detailsSecondary = Color(0xFF505866);
 const _detailsBlue = Color(0xFF0068F5);
 const _detailsDivider = Color(0xFFF1F4F8);
 const _detailsAccountNumber = Color(0xFF505866);
@@ -687,11 +688,14 @@ class _TransactionList extends StatelessWidget {
             left: 28,
             top: cursor,
             child: Text(
+              key: Key('account-transaction-date-$dateKey'),
               '${transaction.occurredAt.month}월 '
               '${transaction.occurredAt.day}일',
               style: const TextStyle(
-                color: _detailsMuted,
+                color: _detailsSecondary,
                 fontSize: 18,
+                fontWeight: FontWeight.w500,
+                fontVariations: [FontVariation('wght', 500)],
                 letterSpacing: -.6,
               ),
             ),
@@ -705,6 +709,7 @@ class _TransactionList extends StatelessWidget {
         _TransactionRow(
           top: cursor,
           title: transaction.title,
+          transactionId: transaction.id,
           time:
               '${_formatDetailsTime(transaction.occurredAt)} · '
               '${transaction.channel}',
@@ -774,6 +779,7 @@ class _TransactionRow extends StatelessWidget {
   const _TransactionRow({
     required this.top,
     required this.title,
+    required this.transactionId,
     required this.time,
     required this.amount,
     required this.balance,
@@ -782,6 +788,7 @@ class _TransactionRow extends StatelessWidget {
 
   final double top;
   final String title;
+  final String transactionId;
   final String time;
   final String amount;
   final String balance;
@@ -830,10 +837,13 @@ class _TransactionRow extends StatelessWidget {
             left: 0,
             top: 49,
             child: Text(
+              key: Key('account-transaction-time-$transactionId'),
               time,
               style: const TextStyle(
-                color: _detailsMuted,
+                color: _detailsSecondary,
                 fontSize: 18,
+                fontWeight: FontWeight.w500,
+                fontVariations: [FontVariation('wght', 500)],
                 letterSpacing: -.5,
               ),
             ),
@@ -842,6 +852,7 @@ class _TransactionRow extends StatelessWidget {
             right: 0,
             top: 49,
             child: Text(
+              key: Key('account-transaction-balance-$transactionId'),
               balance,
               style: const TextStyle(
                 color: _detailsMuted,
