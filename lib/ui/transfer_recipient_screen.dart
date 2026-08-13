@@ -2546,7 +2546,7 @@ class _TransferFailurePopup extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 20.5,
                         height: 1.38,
-                        color: Color(0xFF505866),
+                        color: Color(0xFFFF5C73),
                         fontWeight: FontWeight.w500,
                         fontVariations: [FontVariation('wght', 500)],
                         letterSpacing: -.45,
