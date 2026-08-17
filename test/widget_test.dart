@@ -611,6 +611,68 @@ void main() {
     },
   );
 
+  testWidgets('all transactions across many days can scroll into view', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    addTearDown(store.dispose);
+    final account = await store.saveAccount(
+      BankAccount(
+        id: 'multi-day-history',
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TRINHTRUNGMINH',
+        accountNumber: '110602923598',
+        accountType: '저축예금',
+        openingBalance: 100000,
+        createdAt: DateTime(2026, 8, 17),
+      ),
+    );
+    final transactionIds = <String>[];
+    for (var index = 0; index < 12; index++) {
+      final transaction = await store.createTransaction(
+        accountId: account.id,
+        title: 'TX-$index',
+        signedAmount: 100,
+        occurredAt: DateTime(2026, 8, 17).subtract(Duration(days: index)),
+        channel: '모바일',
+      );
+      transactionIds.add(transaction.id);
+    }
+
+    await tester.pumpWidget(
+      _TestHost(
+        home: AccountDetailsScreen(
+          auth: _SignedInAuthService(),
+          dataStore: store,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final transactionId in transactionIds) {
+      expect(
+        find.byKey(Key('account-transaction-time-$transactionId')),
+        findsOneWidget,
+      );
+    }
+    await tester.drag(
+      find.byKey(const Key('account-details-scroll')),
+      const Offset(0, -10000),
+    );
+    await tester.pumpAndSettle();
+
+    final oldestTransactionRect = tester.getRect(find.text('TX-0'));
+    expect(oldestTransactionRect.top, greaterThanOrEqualTo(0));
+    expect(oldestTransactionRect.bottom, lessThan(1164));
+    expect(
+      find.byKey(const Key('account-transaction-date-2026-8-6')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('transfer recipient entry selects a bank and enables next', (
     tester,
   ) async {

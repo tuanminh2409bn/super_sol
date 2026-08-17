@@ -149,10 +149,14 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
     final transactions = account == null
         ? const <LedgerTransaction>[]
         : widget.dataStore.transactionsFor(account.id);
-    final estimatedContentHeight =
-        760.0 + accountSummaryOffset + (transactions.length * 125);
-    final contentHeight = estimatedContentHeight > 1780
-        ? estimatedContentHeight
+    final requiredContentHeight =
+        _TransactionLayoutMetrics.contentBottom(
+          transactions,
+          verticalOffset: accountSummaryOffset,
+        ) +
+        _TransactionLayoutMetrics.bottomPadding;
+    final contentHeight = requiredContentHeight > 1780
+        ? requiredContentHeight
         : 1780.0;
     final collapsed = _scrollOffset >= 340;
 
@@ -693,12 +697,10 @@ class _TransactionList extends StatelessWidget {
       ];
     }
     final widgets = <Widget>[];
-    var cursor = 652.0 + verticalOffset;
+    var cursor = _TransactionLayoutMetrics.firstRowTop + verticalOffset;
     String? previousDate;
     for (final transaction in transactions) {
-      final dateKey =
-          '${transaction.occurredAt.year}-${transaction.occurredAt.month}-'
-          '${transaction.occurredAt.day}';
+      final dateKey = _TransactionLayoutMetrics.dateKey(transaction);
       if (dateKey != previousDate) {
         if (previousDate != null) {
           widgets.add(
@@ -709,7 +711,7 @@ class _TransactionList extends StatelessWidget {
               child: const Divider(height: 1, color: Color(0xFFE8EBF0)),
             ),
           );
-          cursor += 46;
+          cursor += _TransactionLayoutMetrics.dayDividerExtent;
         }
         widgets.add(
           Positioned(
@@ -729,7 +731,7 @@ class _TransactionList extends StatelessWidget {
             ),
           ),
         );
-        cursor += 52;
+        cursor += _TransactionLayoutMetrics.dateHeaderExtent;
         previousDate = dateKey;
       }
       final signed = transaction.signedAmount;
@@ -749,9 +751,41 @@ class _TransactionList extends StatelessWidget {
           positive: signed >= 0,
         ),
       );
-      cursor += 110;
+      cursor += _TransactionLayoutMetrics.rowExtent;
     }
     return widgets;
+  }
+}
+
+class _TransactionLayoutMetrics {
+  const _TransactionLayoutMetrics._();
+
+  static const firstRowTop = 652.0;
+  static const dateHeaderExtent = 52.0;
+  static const dayDividerExtent = 46.0;
+  static const rowExtent = 110.0;
+  static const bottomPadding = 150.0;
+
+  static String dateKey(LedgerTransaction transaction) =>
+      '${transaction.occurredAt.year}-${transaction.occurredAt.month}-'
+      '${transaction.occurredAt.day}';
+
+  static double contentBottom(
+    List<LedgerTransaction> transactions, {
+    required double verticalOffset,
+  }) {
+    var cursor = firstRowTop + verticalOffset;
+    String? previousDate;
+    for (final transaction in transactions) {
+      final currentDate = dateKey(transaction);
+      if (currentDate != previousDate) {
+        if (previousDate != null) cursor += dayDividerExtent;
+        cursor += dateHeaderExtent;
+        previousDate = currentDate;
+      }
+      cursor += rowExtent;
+    }
+    return cursor;
   }
 }
 
