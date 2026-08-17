@@ -15,6 +15,14 @@ const _detailsBlue = Color(0xFF0068F5);
 const _detailsDivider = Color(0xFFF1F4F8);
 const _detailsAccountNumber = Color(0xFF505866);
 const _detailsAccountLogoSize = 52.0;
+const _detailsAccountTypeWidth = 427.0;
+const _detailsAccountTypeStyle = TextStyle(
+  color: Color(0xFF2D323C),
+  fontFamily: 'NotoSansKR',
+  fontSize: 22,
+  fontWeight: FontWeight.w600,
+  letterSpacing: -1,
+);
 
 class AccountDetailsScreen extends StatefulWidget {
   AccountDetailsScreen({
@@ -136,10 +144,13 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
         ? widget.auth.displayName
         : 'TÀI KHOẢN';
     final account = _selectedAccount;
+    final accountType = _displayAccountType(account?.accountType);
+    final accountSummaryOffset = _accountTypeWrapOffset(accountType);
     final transactions = account == null
         ? const <LedgerTransaction>[]
         : widget.dataStore.transactionsFor(account.id);
-    final estimatedContentHeight = 760.0 + (transactions.length * 125);
+    final estimatedContentHeight =
+        760.0 + accountSummaryOffset + (transactions.length * 125);
     final contentHeight = estimatedContentHeight > 1780
         ? estimatedContentHeight
         : 1780.0;
@@ -162,9 +173,11 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
                   children: [
                     _AccountSummary(
                       account: account,
+                      accountType: accountType,
                       balance: account == null
                           ? 0
                           : widget.dataStore.balanceFor(account.id),
+                      verticalOffset: accountSummaryOffset,
                       onTransfer: _openTransferRecipient,
                     ),
                     _TransactionList(
@@ -172,6 +185,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
                       account: account,
                       transactions: transactions,
                       store: widget.dataStore,
+                      verticalOffset: accountSummaryOffset,
                     ),
                   ],
                 ),
@@ -323,12 +337,16 @@ class _DetailsHeader extends StatelessWidget {
 class _AccountSummary extends StatelessWidget {
   const _AccountSummary({
     required this.account,
+    required this.accountType,
     required this.balance,
+    required this.verticalOffset,
     required this.onTransfer,
   });
 
   final BankAccount? account;
+  final String accountType;
   final int balance;
+  final double verticalOffset;
   final VoidCallback onTransfer;
 
   @override
@@ -373,34 +391,35 @@ class _AccountSummary extends StatelessWidget {
         Positioned(
           left: 90,
           top: 243,
+          width: _detailsAccountTypeWidth,
           child: Text(
             key: const Key('account-type-text'),
-            _displayAccountType(account?.accountType),
-            style: const TextStyle(
-              color: Color(0xFF2D323C),
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -1,
-            ),
+            accountType,
+            softWrap: true,
+            style: _detailsAccountTypeStyle,
           ),
         ),
         Positioned(
           left: 90,
-          top: 285,
+          right: 72,
+          top: 285 + verticalOffset,
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                key: const Key('account-number-text'),
-                account == null
-                    ? '-'
-                    : '${account!.bankDisplayName} ${account!.accountNumber}',
-                style: const TextStyle(
-                  color: _detailsAccountNumber,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  fontVariations: [FontVariation('wght', 500)],
-                  letterSpacing: -.5,
+              Flexible(
+                child: Text(
+                  key: const Key('account-number-text'),
+                  account == null
+                      ? '-'
+                      : '${account!.bankDisplayName} ${account!.accountNumber}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _detailsAccountNumber,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    fontVariations: [FontVariation('wght', 500)],
+                    letterSpacing: -.5,
+                  ),
                 ),
               ),
               if (account != null) ...[
@@ -424,7 +443,7 @@ class _AccountSummary extends StatelessWidget {
         ),
         Positioned(
           left: 28,
-          top: 330,
+          top: 330 + verticalOffset,
           child: Text(
             key: const Key('account-balance-text'),
             '${_formatDetailsMoney(balance)}원',
@@ -438,7 +457,7 @@ class _AccountSummary extends StatelessWidget {
         ),
         Positioned(
           left: 28,
-          top: 381,
+          top: 381 + verticalOffset,
           child: Text(
             key: const Key('account-available-balance-text'),
             '출금가능금액 ${_formatDetailsMoney(balance)}원',
@@ -453,7 +472,7 @@ class _AccountSummary extends StatelessWidget {
         ),
         Positioned(
           left: 28,
-          top: 432,
+          top: 432 + verticalOffset,
           width: 533,
           height: 68,
           child: GestureDetector(
@@ -478,12 +497,12 @@ class _AccountSummary extends StatelessWidget {
             ),
           ),
         ),
-        const Positioned(
+        Positioned(
           left: 0,
           right: 0,
-          top: 534,
+          top: 534 + verticalOffset,
           height: 15,
-          child: ColoredBox(color: _detailsDivider),
+          child: const ColoredBox(color: _detailsDivider),
         ),
       ],
     );
@@ -639,28 +658,33 @@ class _TransactionList extends StatelessWidget {
     required this.account,
     required this.transactions,
     required this.store,
+    required this.verticalOffset,
   });
 
   final String accountName;
   final BankAccount? account;
   final List<LedgerTransaction> transactions;
   final AppDataStore store;
+  final double verticalOffset;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
-      children: [const _FilterBar(top: 558), ..._transactionWidgets()],
+      children: [
+        _FilterBar(top: 558 + verticalOffset),
+        ..._transactionWidgets(),
+      ],
     );
   }
 
   List<Widget> _transactionWidgets() {
     if (account == null || transactions.isEmpty) {
-      return const [
+      return [
         Positioned(
           left: 0,
           right: 0,
-          top: 680,
-          child: Text(
+          top: 680 + verticalOffset,
+          child: const Text(
             '거래내역이 없습니다.',
             textAlign: TextAlign.center,
             style: TextStyle(color: _detailsMuted, fontSize: 18),
@@ -669,7 +693,7 @@ class _TransactionList extends StatelessWidget {
       ];
     }
     final widgets = <Widget>[];
-    var cursor = 652.0;
+    var cursor = 652.0 + verticalOffset;
     String? previousDate;
     for (final transaction in transactions) {
       final dateKey =
@@ -877,6 +901,21 @@ String _formatDetailsMoney(int value) => value.toString().replaceAllMapped(
   RegExp(r'(?<!^)(?=(\d{3})+$)'),
   (_) => ',',
 );
+
+double _accountTypeWrapOffset(String accountType) {
+  final wrappedPainter = TextPainter(
+    text: TextSpan(text: accountType, style: _detailsAccountTypeStyle),
+    textDirection: TextDirection.ltr,
+    textScaler: TextScaler.noScaling,
+  )..layout(maxWidth: _detailsAccountTypeWidth);
+  final singleLinePainter = TextPainter(
+    text: const TextSpan(text: '가', style: _detailsAccountTypeStyle),
+    textDirection: TextDirection.ltr,
+    textScaler: TextScaler.noScaling,
+  )..layout(maxWidth: _detailsAccountTypeWidth);
+  final extraHeight = wrappedPainter.height - singleLinePainter.height;
+  return extraHeight > 0 ? extraHeight : 0;
+}
 
 String _displayAccountType(String? value) {
   if (value == null || value.isEmpty) return '등록된 계좌가 없습니다';

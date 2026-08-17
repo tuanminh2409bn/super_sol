@@ -550,6 +550,67 @@ void main() {
     expect(find.byType(TransferRecipientScreen), findsOneWidget);
   });
 
+  testWidgets(
+    'a long account type wraps clear of icons and following account details',
+    (tester) async {
+      _configureMockupViewport(tester);
+      final store = AppDataStore.inMemory(withMockData: false);
+      addTearDown(store.dispose);
+      await store.saveAccount(
+        BankAccount(
+          id: 'long-account-type',
+          bankCode: '신한',
+          bankDisplayName: '신한',
+          ownerName: 'TRINHTRUNGMINH',
+          accountNumber: '110602923598',
+          accountType: '[금융거래한도계좌2]신한 주거래 우대통장(저축예금)',
+          openingBalance: 10000,
+          createdAt: DateTime(2026, 8, 17),
+        ),
+      );
+
+      await tester.pumpWidget(
+        _TestHost(
+          home: AccountDetailsScreen(
+            auth: _SignedInAuthService(),
+            dataStore: store,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final accountTypeFinder = find.byKey(const Key('account-type-text'));
+      final accountTypeRect = tester.getRect(accountTypeFinder);
+      final accountNumberRect = tester.getRect(
+        find.byKey(const Key('account-number-text')),
+      );
+      final scanIconRect = tester.getRect(
+        find.byKey(const Key('account-scan-icon')),
+      );
+      final balanceRect = tester.getRect(
+        find.byKey(const Key('account-balance-text')),
+      );
+      final accountType = tester.widget<Text>(accountTypeFinder);
+      final accountTypeContext = tester.element(accountTypeFinder);
+      final accountTypePainter = TextPainter(
+        text: TextSpan(
+          text: accountType.data,
+          style: DefaultTextStyle.of(
+            accountTypeContext,
+          ).style.merge(accountType.style),
+        ),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(accountTypeContext),
+      )..layout(maxWidth: accountTypeRect.width);
+
+      expect(accountTypePainter.computeLineMetrics(), hasLength(2));
+      expect(accountTypeRect.right, lessThan(scanIconRect.left));
+      expect(accountTypeRect.bottom, lessThan(accountNumberRect.top));
+      expect(accountNumberRect.bottom, lessThan(balanceRect.top));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('transfer recipient entry selects a bank and enables next', (
     tester,
   ) async {
