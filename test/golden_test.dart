@@ -335,6 +335,47 @@ void main() {
     );
   });
 
+  testWidgets('long source account name matches the ellipsized reference', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    addTearDown(store.dispose);
+    await store.saveAccount(
+      BankAccount(
+        id: 'golden-long-source-account',
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TRINHTRUNGMINH',
+        accountNumber: '110602923598',
+        accountType: '[금융거래한도계좌2]신한 주거래 우대통장(저축예금)',
+        openingBalance: 6809,
+        createdAt: DateTime(2026, 8, 18),
+      ),
+    );
+    await store.saveRecipient(
+      const SavedRecipient(
+        id: 'golden-long-source-recipient',
+        displayName: 'HO THI BAO',
+        bankCode: '국민',
+        accountNumber: '85300100157042',
+      ),
+    );
+    await tester.pumpWidget(_host(TransferRecipientScreen(dataStore: store)));
+    await _precache(tester, const [
+      'assets/images/bank_shinhan_transparent.png',
+      'assets/images/bank_kb_transparent.png',
+    ]);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('recipient-HO THI BAO')));
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/16_long_source_account.png'),
+    );
+  });
+
   testWidgets('home transfer failure popup matches the original reference', (
     tester,
   ) async {

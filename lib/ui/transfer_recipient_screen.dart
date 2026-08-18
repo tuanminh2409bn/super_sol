@@ -23,6 +23,10 @@ const _recipientSectionStyle = TextStyle(
   fontVariations: [FontVariation('wght', 580)],
   letterSpacing: -.45,
 );
+const _amountSourceHeaderStyle = TextStyle(
+  fontSize: 23,
+  fontWeight: FontWeight.w700,
+);
 
 enum TransferFlowResult { failed }
 
@@ -1418,6 +1422,9 @@ class _AmountPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entered = amount > 0;
+    final sourceProductLabel = _sourceProductLabel(sourceAccount.productName);
+    final sourceProductTruncated =
+        sourceProductLabel != sourceAccount.productName;
     return Stack(
       children: [
         Positioned(
@@ -1434,17 +1441,29 @@ class _AmountPage extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '${sourceAccount.productName} 계좌에서',
-                        style: const TextStyle(
-                          fontSize: 23,
-                          fontWeight: FontWeight.w700,
+                      Flexible(
+                        child: Text(
+                          key: const Key('amount-source-account-name'),
+                          sourceProductLabel,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.ellipsis,
+                          style: _amountSourceHeaderStyle,
                         ),
                       ),
+                      SizedBox(width: sourceProductTruncated ? 28 : 6),
+                      const Text(
+                        key: Key('amount-source-account-suffix'),
+                        '계좌에서',
+                        style: _amountSourceHeaderStyle,
+                      ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down_rounded, size: 28),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        key: Key('amount-source-account-arrow'),
+                        size: 28,
+                      ),
                     ],
                   ),
                 ),
@@ -1540,6 +1559,13 @@ class _AmountPage extends StatelessWidget {
         ? '님'
         : '';
     return '$recipientName$suffix 계좌로';
+  }
+
+  static String _sourceProductLabel(String value) {
+    const visibleCharacterCount = 19;
+    final characters = value.runes;
+    if (characters.length <= visibleCharacterCount) return value;
+    return '${String.fromCharCodes(characters.take(visibleCharacterCount))}...';
   }
 
   static String _formatted(int value) => value.toString().replaceAllMapped(

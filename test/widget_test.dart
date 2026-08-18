@@ -673,6 +673,60 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a long source account name ellipsizes before its fixed suffix', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    addTearDown(store.dispose);
+    const longProductName = '[금융거래한도계좌2]신한 주거래 우대통장(저축예금)';
+    await store.saveAccount(
+      BankAccount(
+        id: 'long-transfer-source',
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TRINHTRUNGMINH',
+        accountNumber: '110602923598',
+        accountType: longProductName,
+        openingBalance: 10000,
+        createdAt: DateTime(2026, 8, 18),
+      ),
+    );
+    await store.saveRecipient(
+      const SavedRecipient(
+        id: 'long-source-recipient',
+        displayName: 'HO THI BAO',
+        bankCode: '국민',
+        accountNumber: '85300100157042',
+      ),
+    );
+
+    await tester.pumpWidget(
+      _TestHost(home: TransferRecipientScreen(dataStore: store)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('recipient-HO THI BAO')));
+    await tester.pumpAndSettle();
+
+    final nameFinder = find.byKey(const Key('amount-source-account-name'));
+    final suffixFinder = find.byKey(const Key('amount-source-account-suffix'));
+    final arrowFinder = find.byKey(const Key('amount-source-account-arrow'));
+    final name = tester.widget<Text>(nameFinder);
+    final nameRect = tester.getRect(nameFinder);
+    final suffixRect = tester.getRect(suffixFinder);
+    final arrowRect = tester.getRect(arrowFinder);
+    const visibleLabel = '[금융거래한도계좌2]신한 주거래 우...';
+    expect(name.data, visibleLabel);
+    expect(name.maxLines, 1);
+    expect(name.softWrap, isFalse);
+    expect(name.overflow, TextOverflow.ellipsis);
+    expect(nameRect.right, lessThan(suffixRect.left));
+    expect(suffixRect.right, lessThan(arrowRect.left));
+
+    expect(find.text(longProductName), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('transfer recipient entry selects a bank and enables next', (
     tester,
   ) async {
@@ -727,12 +781,15 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('source-account-sheet')), findsOneWidget);
     expect(find.text('출금계좌 선택'), findsOneWidget);
-    expect(find.text('[금융거래한도계좌2]저축예금'), findsOneWidget);
-    expect(find.text('신한 110-628-103680'), findsNWidgets(2));
     final sourceOption = find.byKey(
       const Key('source-account-option-신한-110-628-103680'),
     );
     expect(sourceOption, findsOneWidget);
+    expect(
+      find.descendant(of: sourceOption, matching: find.text('[금융거래한도계좌2]저축예금')),
+      findsOneWidget,
+    );
+    expect(find.text('신한 110-628-103680'), findsNWidgets(2));
     final sourceLogo = tester.widget<Image>(
       find.descendant(of: sourceOption, matching: find.byType(Image)),
     );
