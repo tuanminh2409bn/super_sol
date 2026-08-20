@@ -980,6 +980,23 @@ void main() {
     expect(find.text('재배열'), findsOneWidget);
     expect(find.byKey(const Key('transfer-back')), findsNothing);
 
+    final rearrangeLabel = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('transfer-pin-rearrange')),
+        matching: find.text('재배열'),
+      ),
+    );
+    for (final digit in List.generate(10, (index) => '$index')) {
+      final digitLabel = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(Key('transfer-pin-key-$digit')),
+          matching: find.text(digit),
+        ),
+      );
+      expect(digitLabel.style?.fontWeight, rearrangeLabel.style?.fontWeight);
+      expect(digitLabel.style?.fontWeight, FontWeight.w600);
+    }
+
     for (final digit in ['0', '1', '2', '3']) {
       await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
     }
@@ -1134,6 +1151,52 @@ void main() {
           .onPressed,
       isNull,
     );
+  });
+
+  testWidgets('Android transfer PIN blue panel fills the full screen width', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(720, 1280);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await _openTransferPinScreen(tester, platform: TargetPlatform.android);
+
+    final background = find.byKey(
+      const Key('android-transfer-pin-blue-background'),
+    );
+    expect(background, findsOneWidget);
+    final backgroundRect = tester.getRect(background);
+    final keypadRect = tester.getRect(
+      find.byKey(const Key('transfer-pin-keypad')),
+    );
+    expect(backgroundRect.left, 0);
+    expect(backgroundRect.right, 720);
+    expect(backgroundRect.bottom, 1280);
+    expect(backgroundRect.top, moreOrLessEquals(keypadRect.top, epsilon: 2));
+    expect(backgroundRect.width, greaterThan(keypadRect.width));
+    expect(
+      tester.widget<ColoredBox>(background).color,
+      const Color(0xFF005DFA),
+    );
+  });
+
+  testWidgets('iOS transfer PIN keeps the original canvas background', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(720, 1280);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await _openTransferPinScreen(tester, platform: TargetPlatform.iOS);
+
+    expect(
+      find.byKey(const Key('android-transfer-pin-blue-background')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('transfer-pin-keypad')), findsOneWidget);
   });
 
   testWidgets('recipient search and favorite controls update real data', (
@@ -1692,6 +1755,40 @@ void main() {
   });
 }
 
+Future<void> _openTransferPinScreen(
+  WidgetTester tester, {
+  required TargetPlatform platform,
+}) async {
+  await tester.pumpWidget(
+    _TestHost(
+      platform: platform,
+      home: TransferRecipientScreen(
+        dataStore: AppDataStore.inMemory(),
+        initialPinKeys: const [
+          '0',
+          '1',
+          '2',
+          '3',
+          '4',
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+        ],
+      ),
+    ),
+  );
+  await tester.tap(find.byKey(const Key('recipient-TRINH TRUN')));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('amount-key-1')));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('transfer-next')));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('transfer-next')));
+  await tester.pumpAndSettle();
+}
+
 void _configureMockupViewport(WidgetTester tester) {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(589, 1280);
@@ -1700,9 +1797,10 @@ void _configureMockupViewport(WidgetTester tester) {
 }
 
 class _TestHost extends StatelessWidget {
-  const _TestHost({required this.home});
+  const _TestHost({required this.home, this.platform});
 
   final Widget home;
+  final TargetPlatform? platform;
 
   @override
   Widget build(BuildContext context) {
@@ -1710,6 +1808,7 @@ class _TestHost extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        platform: platform,
         fontFamily: 'NotoSansKR',
         fontFamilyFallback: const [
           'Apple SD Gothic Neo',

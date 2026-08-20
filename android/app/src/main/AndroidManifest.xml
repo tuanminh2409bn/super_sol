@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Super SOL"
+        android:label="신한 슈퍼SOL"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

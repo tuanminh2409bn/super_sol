@@ -35,10 +35,16 @@ class DesignCanvas extends StatelessWidget {
     super.key,
     required this.child,
     this.backgroundColor = Colors.white,
-  });
+    this.fullWidthBottomColor,
+    this.fullWidthBottomTop,
+    this.fullWidthBottomKey,
+  }) : assert((fullWidthBottomColor == null) == (fullWidthBottomTop == null));
 
   final Widget child;
   final Color backgroundColor;
+  final Color? fullWidthBottomColor;
+  final double? fullWidthBottomTop;
+  final Key? fullWidthBottomKey;
 
   @override
   Widget build(BuildContext context) {
@@ -50,10 +56,12 @@ class DesignCanvas extends StatelessWidget {
             constraints.maxWidth / mockupWidth,
             constraints.maxHeight / mockupHeight,
           );
-          return Center(
+          final canvasHeight = mockupHeight * scale;
+          final canvasTop = (constraints.maxHeight - canvasHeight) / 2;
+          final canvas = Center(
             child: SizedBox(
               width: mockupWidth * scale,
-              height: mockupHeight * scale,
+              height: canvasHeight,
               child: FittedBox(
                 // The canvas keeps the mockup aspect ratio. `contain` avoids
                 // stretching glyphs and icon edges when a device's dimensions
@@ -84,6 +92,22 @@ class DesignCanvas extends StatelessWidget {
                 ),
               ),
             ),
+          );
+          final bottomColor = fullWidthBottomColor;
+          final bottomTop = fullWidthBottomTop;
+          if (bottomColor == null || bottomTop == null) return canvas;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                top: canvasTop + (bottomTop * scale),
+                bottom: 0,
+                child: ColoredBox(key: fullWidthBottomKey, color: bottomColor),
+              ),
+              canvas,
+            ],
           );
         },
       ),

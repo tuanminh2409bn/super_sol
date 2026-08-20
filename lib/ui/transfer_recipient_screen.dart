@@ -364,6 +364,9 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   @override
   Widget build(BuildContext context) {
     final sourceAccount = _selectedSourceAccount;
+    final androidPinFullBleed =
+        _stage == _TransferStage.pin &&
+        Theme.of(context).platform == TargetPlatform.android;
     final actionButtonBottom = _stage == _TransferStage.amount
         ? 20.0
         : _stage == _TransferStage.confirmation
@@ -378,6 +381,11 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
         backgroundColor: const Color(0xFFF0F3FA),
       ),
       child: DesignCanvas(
+        fullWidthBottomColor: androidPinFullBleed ? _pinBlue : null,
+        fullWidthBottomTop: androidPinFullBleed ? 870 : null,
+        fullWidthBottomKey: androidPinFullBleed
+            ? const Key('android-transfer-pin-blue-background')
+            : null,
         child: Material(
           color: Colors.white,
           child: Stack(
@@ -2509,7 +2517,7 @@ class _PinKey extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.fontSize = 32,
-    this.fontWeight = FontWeight.w400,
+    this.fontWeight = FontWeight.w600,
     this.letterSpacing = 0,
   });
 

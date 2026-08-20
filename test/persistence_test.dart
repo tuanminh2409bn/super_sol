@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:super_sol/core/app_data.dart';
@@ -5,6 +7,25 @@ import 'package:super_sol/core/auth_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'native auth restoration stays pending until Firebase reports state',
+    () async {
+      final states = StreamController<String?>();
+      var completed = false;
+      final restoration = waitForInitialFirebaseAuthState(states.stream);
+      unawaited(restoration.then((_) => completed = true));
+
+      await Future<void>.delayed(Duration.zero);
+      expect(states.hasListener, isTrue);
+      expect(completed, isFalse);
+
+      states.add('restored-user');
+      expect(await restoration, 'restored-user');
+      expect(completed, isTrue);
+      await states.close();
+    },
+  );
 
   test('login and ledger survive a full service restart', () async {
     SharedPreferences.setMockInitialValues({});
@@ -50,9 +71,12 @@ void main() {
     await restoredStore.initialize(restoredAuth.dataScope);
     expect(restoredStore.accounts, hasLength(1));
     expect(restoredStore.balanceFor(account.id), 487500);
-    expect(
-      restoredStore.transactionsFor(account.id).single.title,
-      '재실행 후 유지',
-    );
+    expect(restoredStore.transactionsFor(account.id).single.title, '재실행 후 유지');
+
+    await restoredAuth.signOut();
+    final signedOutAuth = AuthService();
+    await signedOutAuth.initialize();
+    expect(signedOutAuth.isSignedIn, isFalse);
+    expect(signedOutAuth.dataScope, 'guest');
   });
 }
