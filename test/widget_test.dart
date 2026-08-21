@@ -1358,7 +1358,7 @@ void main() {
     expect(find.text('토스뱅크'), findsNothing);
   });
 
-  testWidgets('four account digits show the matching compact suggestion chip', (
+  testWidgets('matching account suggestion chips stay hidden while typing', (
     tester,
   ) async {
     _configureMockupViewport(tester);
@@ -1371,12 +1371,12 @@ void main() {
       accountType: '입출금',
       openingBalance: 500000,
     );
-    final pham = await store.createRecipient(
+    await store.createRecipient(
       displayName: 'PHAM DINH',
       bankCode: '토스뱅크',
       accountNumber: '100191200803',
     );
-    final trinh = await store.createRecipient(
+    await store.createRecipient(
       displayName: 'TRINH TRUN',
       bankCode: '우리',
       accountNumber: '1002365702814',
@@ -1392,25 +1392,10 @@ void main() {
     }
     await tester.pump();
 
-    expect(
-      find.byKey(const Key('transfer-account-suggestions')),
-      findsOneWidget,
-    );
-    expect(find.text('PHAM DINH 100191200803'), findsOneWidget);
+    expect(find.byKey(const Key('transfer-account-suggestions')), findsNothing);
+    expect(find.text('PHAM DINH 100191200803'), findsNothing);
     expect(find.text('TRINH TRUN 1002365702814'), findsNothing);
     expect(find.text('은행 또는 증권사 선택'), findsOneWidget);
-    expect(
-      find.byKey(Key('transfer-account-suggestion-${pham.id}')),
-      findsOneWidget,
-    );
-    final bankRect = tester.getRect(
-      find.byKey(const Key('transfer-bank-selector')),
-    );
-    final suggestionRect = tester.getRect(
-      find.byKey(const Key('transfer-account-suggestions')),
-    );
-    expect(suggestionRect.top, greaterThan(bankRect.bottom));
-    expect(suggestionRect.height, 44);
 
     await tester.tap(find.byKey(const Key('transfer-clear-account')));
     await tester.pump();
@@ -1420,18 +1405,12 @@ void main() {
     await tester.pump();
 
     expect(find.text('PHAM DINH 100191200803'), findsNothing);
-    expect(find.text('TRINH TRUN 1002365702814'), findsOneWidget);
-    await tester.tap(
-      find.byKey(Key('transfer-account-suggestion-${trinh.id}')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('TRINH TRUN님 계좌로'), findsOneWidget);
-    expect(find.textContaining('1002365702814'), findsOneWidget);
+    expect(find.text('TRINH TRUN 1002365702814'), findsNothing);
+    expect(find.byKey(const Key('transfer-account-suggestions')), findsNothing);
   });
 
   testWidgets(
-    'account suggestions include newly saved accounts and all matching recipients',
+    'saved accounts and matching recipients do not render suggestion chips',
     (tester) async {
       _configureMockupViewport(tester);
       final store = AppDataStore.inMemory(withMockData: false);
@@ -1443,7 +1422,7 @@ void main() {
         accountType: '출금계좌',
         openingBalance: 500000,
       );
-      final ownAccount = await store.createAccount(
+      await store.createAccount(
         bankCode: '우리',
         bankDisplayName: '우리',
         ownerName: 'SECOND OWNER',
@@ -1451,12 +1430,12 @@ void main() {
         accountType: '새로 추가한 계좌',
         openingBalance: 300000,
       );
-      final first = await store.createRecipient(
+      await store.createRecipient(
         displayName: 'MATCH ONE',
         bankCode: '국민',
         accountNumber: '123400000002',
       );
-      final second = await store.createRecipient(
+      await store.createRecipient(
         displayName: 'MATCH TWO',
         bankCode: '하나',
         accountNumber: '123400000003',
@@ -1473,30 +1452,12 @@ void main() {
       await tester.pump();
 
       expect(
-        find.byKey(Key('transfer-account-suggestion-${first.id}')),
-        findsOneWidget,
+        find.byKey(const Key('transfer-account-suggestions')),
+        findsNothing,
       );
-      final suggestionList = find.descendant(
-        of: find.byKey(const Key('transfer-account-suggestions')),
-        matching: find.byType(Scrollable),
-      );
-      await tester.scrollUntilVisible(
-        find.byKey(Key('transfer-account-suggestion-${second.id}')),
-        240,
-        scrollable: suggestionList,
-      );
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('transfer-account-suggestion-123400000001')),
-        240,
-        scrollable: suggestionList,
-      );
-
-      await tester.tap(
-        find.byKey(const Key('transfer-account-suggestion-123400000001')),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('새로 추가한 계좌 계좌로'), findsOneWidget);
-      expect(find.textContaining(ownAccount.accountNumber), findsOneWidget);
+      expect(find.text('MATCH ONE 123400000002'), findsNothing);
+      expect(find.text('MATCH TWO 123400000003'), findsNothing);
+      expect(find.text('SECOND OWNER 123400000001'), findsNothing);
     },
   );
 

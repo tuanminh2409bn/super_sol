@@ -1146,6 +1146,8 @@ class _RecipientSearchDelegate extends SearchDelegate<_Recipient?> {
 }
 
 class _ManualEntry extends StatelessWidget {
+  static const _showAccountSuggestions = false;
+
   const _ManualEntry({
     required this.account,
     required this.bank,
@@ -1164,7 +1166,7 @@ class _ManualEntry extends StatelessWidget {
   final ValueChanged<_Recipient> onSelectSuggestion;
   @override
   Widget build(BuildContext context) {
-    final hasSuggestions = suggestions.isNotEmpty;
+    final hasSuggestions = _showAccountSuggestions && suggestions.isNotEmpty;
     const bankTop = 412.0;
     return Stack(
       children: [
