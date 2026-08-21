@@ -1410,6 +1410,58 @@ void main() {
   });
 
   testWidgets(
+    'manual account entry restores the exact saved recipient downstream',
+    (tester) async {
+      _configureMockupViewport(tester);
+      final store = AppDataStore.inMemory(withMockData: false);
+      await store.createAccount(
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'SOURCE OWNER',
+        accountNumber: '110000000000',
+        accountType: '출금계좌',
+        openingBalance: 500000,
+      );
+      await store.createRecipient(
+        displayName: 'HO XUAN TH',
+        bankCode: '신한',
+        accountNumber: '69191044058207',
+      );
+
+      await tester.pumpWidget(
+        _TestHost(home: TransferRecipientScreen(dataStore: store)),
+      );
+      await tester.tap(find.byKey(const Key('transfer-manual-entry')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('transfer-bank-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('bank-신한')));
+      await tester.pumpAndSettle();
+      for (final digit in '69191044058207'.split('')) {
+        await tester.tap(find.byKey(Key('account-key-$digit')));
+      }
+      await tester.pump();
+
+      expect(
+        find.byKey(const Key('transfer-account-suggestions')),
+        findsNothing,
+      );
+      expect(find.text('HO XUAN TH 69191044058207'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('transfer-next')));
+      await tester.pumpAndSettle();
+      expect(find.text('HO XUAN TH님 계좌로'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('amount-key-1')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('transfer-next')));
+      await tester.pumpAndSettle();
+      expect(find.text('HO XUAN TH님 계좌로\n1원 보낼까요?'), findsOneWidget);
+      expect(find.text('아래 계좌'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'saved accounts and matching recipients do not render suggestion chips',
     (tester) async {
       _configureMockupViewport(tester);

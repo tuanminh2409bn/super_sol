@@ -221,6 +221,31 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
     });
   }
 
+  _Recipient? get _matchingManualRecipient {
+    final selectedBank = _bank;
+    final normalizedAccount = AppDataStore.normalizedAccountNumber(_account);
+    if (selectedBank == null || normalizedAccount.isEmpty) return null;
+
+    for (final recipient in [..._savedRecipients, ..._ownAccounts]) {
+      final isSameBank =
+          recipient.bank == selectedBank || recipient.bankCode == selectedBank;
+      final isSameAccount =
+          AppDataStore.normalizedAccountNumber(recipient.account) ==
+          normalizedAccount;
+      if (isSameBank && isSameAccount) return recipient;
+    }
+    return null;
+  }
+
+  void _continueManualEntry() {
+    final recipient = _matchingManualRecipient;
+    setState(() {
+      _recipientName = recipient?.name;
+      _destinationAccountId = recipient?.internalAccountId;
+      _stage = _TransferStage.amount;
+    });
+  }
+
   List<_Recipient> get _savedRecipients {
     final recipients = widget.dataStore.recipients.toList()
       ..sort((first, second) {
@@ -486,9 +511,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                         : (_stage == _TransferStage.confirmation
                               ? _startPinEntry
                               : _canContinue && sourceAccount != null
-                              ? () => setState(
-                                  () => _stage = _TransferStage.amount,
-                                )
+                              ? _continueManualEntry
                               : null),
                     style: FilledButton.styleFrom(
                       backgroundColor: _blue,
