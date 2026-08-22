@@ -574,7 +574,9 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                   enteredDigits: _pinDigits.length,
                   keys: _pinKeys,
                   errorMessage: _transferPinError,
-                  showReset: _pinMode == _TransferPinMode.verify,
+                  showReset:
+                      _pinMode == _TransferPinMode.verify &&
+                      _pinFailedAttempts > 0,
                   inputEnabled: !_pinInputLocked && !_pinBusy,
                   onDigit: _appendPinDigit,
                   onDelete: _deletePinDigit,

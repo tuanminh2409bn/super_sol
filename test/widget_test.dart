@@ -84,6 +84,11 @@ void main() {
     await tester.pumpWidget(_TestHost(home: PinScreen(auth: auth)));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('app-pin-reset')), findsNothing);
+    await _enterAppPin(tester, '000000');
+    expect(find.text('비밀번호가 일치하지 않아요. (1/5)'), findsOneWidget);
+    expect(find.byKey(const Key('app-pin-reset')), findsOneWidget);
+
     await tester.tap(find.byKey(const Key('app-pin-reset')));
     await tester.pumpAndSettle();
     expect(find.text('Xác thực tài khoản Firebase'), findsOneWidget);
@@ -1273,6 +1278,9 @@ void main() {
         platform: TargetPlatform.android,
         auth: auth,
       );
+
+      expect(find.byKey(const Key('transfer-pin-error')), findsNothing);
+      expect(find.byKey(const Key('transfer-pin-reset')), findsNothing);
 
       for (final digit in '0000'.split('')) {
         await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));

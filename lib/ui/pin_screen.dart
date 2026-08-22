@@ -320,7 +320,7 @@ class _PinScreenState extends State<PinScreen> {
                         ),
                       ),
                     ),
-                  if (_mode == _AccessPinMode.verify)
+                  if (_mode == _AccessPinMode.verify && _failedAttempts > 0)
                     Positioned(
                       left: 204,
                       top: 735,
