@@ -41,6 +41,17 @@ void main() {
     expect(registration.ok, isTrue);
     expect(firstAuth.isSignedIn, isTrue);
 
+    final wrongAccount = await firstAuth.reauthenticate(
+      email: 'other@example.com',
+      password: 'secret123',
+    );
+    expect(wrongAccount.ok, isFalse);
+    final correctAccount = await firstAuth.reauthenticate(
+      email: 'persistent@example.com',
+      password: 'secret123',
+    );
+    expect(correctAccount.ok, isTrue);
+
     final firstStore = AppDataStore();
     await firstStore.initialize(firstAuth.dataScope);
     final account = await firstStore.createAccount(

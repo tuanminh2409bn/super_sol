@@ -166,7 +166,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openTransferRecipient() async {
     final result = await Navigator.of(context).push<TransferFlowResult>(
       MaterialPageRoute<TransferFlowResult>(
-        builder: (_) => TransferRecipientScreen(dataStore: widget.dataStore),
+        builder: (_) => TransferRecipientScreen(
+          dataStore: widget.dataStore,
+          auth: widget.auth,
+        ),
       ),
     );
     if (mounted) {

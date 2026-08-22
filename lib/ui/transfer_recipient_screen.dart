@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 
 import '../core/app_data.dart';
+import '../core/auth_service.dart';
 import '../core/bank_catalog.dart';
+import '../core/pin_security.dart';
+import 'auth_sheet.dart';
 import 'bank_logo.dart';
 import 'data_management_screen.dart';
 import 'design_canvas.dart';
@@ -40,15 +44,19 @@ Future<void> showTransferFailurePopup(BuildContext context) {
 
 enum _TransferStage { recipient, amount, confirmation, pin }
 
+enum _TransferPinMode { legacy, loading, verify, create, confirm }
+
 class TransferRecipientScreen extends StatefulWidget {
   TransferRecipientScreen({
     super.key,
     AppDataStore? dataStore,
+    this.auth,
     this.initialPinKeys,
   }) : assert(initialPinKeys == null || initialPinKeys.length == 10),
        dataStore = dataStore ?? AppDataStore.shared;
 
   final AppDataStore dataStore;
+  final AuthService? auth;
   @visibleForTesting
   final List<String>? initialPinKeys;
 
@@ -73,6 +81,11 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   String? _sourceAccountId;
   final List<String> _pinDigits = [];
   List<String> _pinKeys = const [];
+  _TransferPinMode _pinMode = _TransferPinMode.legacy;
+  String? _pendingTransferPin;
+  String? _pinSetupError;
+  int _pinFailedAttempts = 0;
+  bool _pinBusy = false;
 
   @override
   void initState() {
@@ -322,12 +335,37 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   }
 
   void _startPinEntry() {
+    final needsProtectedPin = widget.auth?.isSignedIn ?? false;
     setState(() {
       _pinDigits.clear();
       _pinKeys = List<String>.unmodifiable(
         widget.initialPinKeys ?? _shuffledPinKeys(),
       );
+      _pinMode = needsProtectedPin
+          ? _TransferPinMode.loading
+          : _TransferPinMode.legacy;
+      _pendingTransferPin = null;
+      _pinSetupError = null;
+      _pinFailedAttempts = 0;
+      _pinBusy = false;
       _stage = _TransferStage.pin;
+    });
+    if (needsProtectedPin) unawaited(_loadTransferPinState());
+  }
+
+  Future<void> _loadTransferPinState() async {
+    final auth = widget.auth;
+    if (auth == null || !auth.isSignedIn) return;
+    final status = await auth.pinStatus(PinPurpose.transfer);
+    if (!mounted) return;
+    setState(() {
+      _pinDigits.clear();
+      _pendingTransferPin = null;
+      _pinSetupError = null;
+      _pinFailedAttempts = status.failedAttempts;
+      _pinMode = status.configured
+          ? _TransferPinMode.verify
+          : _TransferPinMode.create;
     });
   }
 
@@ -351,15 +389,19 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
     return true;
   }
 
-  void _rearrangePinKeys() =>
-      setState(() => _pinKeys = _shuffledPinKeys(_pinKeys));
+  void _rearrangePinKeys() {
+    if (_pinInputLocked || _pinBusy) return;
+    setState(() => _pinKeys = _shuffledPinKeys(_pinKeys));
+  }
 
   void _deletePinDigit() {
-    if (_pinDigits.isNotEmpty) setState(_pinDigits.removeLast);
+    if (_pinDigits.isNotEmpty && !_pinInputLocked && !_pinBusy) {
+      setState(_pinDigits.removeLast);
+    }
   }
 
   Future<void> _appendPinDigit(String digit) async {
-    if (_pinDigits.length >= 4) return;
+    if (_pinDigits.length >= 4 || _pinInputLocked || _pinBusy) return;
     var completed = false;
     setState(() {
       _pinDigits.add(digit);
@@ -367,7 +409,98 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
     });
     if (!completed) return;
     await Future<void>.delayed(const Duration(milliseconds: 180));
-    if (mounted) await _completeTransferAfterPin();
+    if (mounted) await _submitTransferPin();
+  }
+
+  bool get _pinInputLocked =>
+      _pinMode == _TransferPinMode.loading ||
+      (_pinMode == _TransferPinMode.verify &&
+          _pinFailedAttempts >= PinSecurityService.maxAttempts);
+
+  String get _enteredTransferPin => _pinDigits.join();
+
+  String get _transferPinTitle => switch (_pinMode) {
+    _TransferPinMode.create => '계좌 비밀번호 설정',
+    _TransferPinMode.confirm => '비밀번호 다시 입력',
+    _ => '계좌 비밀번호',
+  };
+
+  String? get _transferPinError {
+    if (_pinSetupError != null) return _pinSetupError;
+    if (_pinMode != _TransferPinMode.verify || _pinFailedAttempts == 0) {
+      return null;
+    }
+    return '비밀번호가 일치하지 않아요. ($_pinFailedAttempts/${PinSecurityService.maxAttempts})';
+  }
+
+  Future<void> _submitTransferPin() async {
+    if (!mounted || _pinBusy || _pinDigits.length != 4) return;
+    final pin = _enteredTransferPin;
+    final auth = widget.auth;
+    switch (_pinMode) {
+      case _TransferPinMode.loading:
+        return;
+      case _TransferPinMode.legacy:
+        await _completeTransferAfterPin();
+        return;
+      case _TransferPinMode.create:
+        setState(() {
+          _pendingTransferPin = pin;
+          _pinDigits.clear();
+          _pinSetupError = null;
+          _pinMode = _TransferPinMode.confirm;
+        });
+        return;
+      case _TransferPinMode.confirm:
+        if (_pendingTransferPin != pin) {
+          setState(() {
+            _pinDigits.clear();
+            _pinSetupError = '비밀번호가 일치하지 않아요. 다시 입력해주세요.';
+          });
+          return;
+        }
+        if (auth == null) return;
+        setState(() => _pinBusy = true);
+        await auth.setPin(PinPurpose.transfer, pin);
+        if (!mounted) return;
+        await _completeTransferAfterPin();
+        return;
+      case _TransferPinMode.verify:
+        if (auth == null) return;
+        setState(() => _pinBusy = true);
+        final result = await auth.verifyPin(PinPurpose.transfer, pin);
+        if (!mounted) return;
+        if (result.matched) {
+          await _completeTransferAfterPin();
+          return;
+        }
+        setState(() {
+          _pinBusy = false;
+          _pinDigits.clear();
+          _pinFailedAttempts = result.failedAttempts;
+        });
+    }
+  }
+
+  Future<void> _resetTransferPin() async {
+    final auth = widget.auth;
+    if (auth == null || _pinBusy || !auth.isSignedIn) return;
+    final authenticated = await showFirebaseReauthenticationSheet(
+      context,
+      auth: auth,
+    );
+    if (!authenticated || !mounted) return;
+    setState(() => _pinBusy = true);
+    await auth.clearPin(PinPurpose.transfer);
+    if (!mounted) return;
+    setState(() {
+      _pinBusy = false;
+      _pinDigits.clear();
+      _pendingTransferPin = null;
+      _pinSetupError = null;
+      _pinFailedAttempts = 0;
+      _pinMode = _TransferPinMode.create;
+    });
   }
 
   Future<void> _completeTransferAfterPin() async {
@@ -437,11 +570,16 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                 )
               else if (_stage == _TransferStage.pin)
                 _TransferPinPage(
+                  title: _transferPinTitle,
                   enteredDigits: _pinDigits.length,
                   keys: _pinKeys,
+                  errorMessage: _transferPinError,
+                  showReset: _pinMode == _TransferPinMode.verify,
+                  inputEnabled: !_pinInputLocked && !_pinBusy,
                   onDigit: _appendPinDigit,
                   onDelete: _deletePinDigit,
                   onRearrange: _rearrangePinKeys,
+                  onReset: _resetTransferPin,
                 )
               else if (_stage == _TransferStage.amount && sourceAccount != null)
                 _AmountPage(
@@ -2415,18 +2553,28 @@ class _TransferDetailRow extends StatelessWidget {
 
 class _TransferPinPage extends StatelessWidget {
   const _TransferPinPage({
+    required this.title,
     required this.enteredDigits,
     required this.keys,
+    required this.errorMessage,
+    required this.showReset,
+    required this.inputEnabled,
     required this.onDigit,
     required this.onDelete,
     required this.onRearrange,
+    required this.onReset,
   });
 
+  final String title;
   final int enteredDigits;
   final List<String> keys;
+  final String? errorMessage;
+  final bool showReset;
+  final bool inputEnabled;
   final ValueChanged<String> onDigit;
   final VoidCallback onDelete;
   final VoidCallback onRearrange;
+  final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) {
@@ -2435,12 +2583,12 @@ class _TransferPinPage extends StatelessWidget {
         : keys;
     return Stack(
       children: [
-        const Positioned(
+        Positioned(
           left: 0,
           right: 0,
           top: 286,
           child: Text(
-            '계좌 비밀번호',
+            title,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
           ),
@@ -2472,6 +2620,52 @@ class _TransferPinPage extends StatelessWidget {
             ),
           ),
         ),
+        if (errorMessage case final message?)
+          Positioned(
+            key: const Key('transfer-pin-error'),
+            left: 70,
+            right: 70,
+            top: 442,
+            height: 45,
+            child: Center(
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFFE33232),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w500,
+                  fontVariations: [FontVariation('wght', 500)],
+                  letterSpacing: -.7,
+                ),
+              ),
+            ),
+          ),
+        if (showReset)
+          Positioned(
+            left: 204,
+            top: 765,
+            width: 181,
+            height: 58,
+            child: FilledButton(
+              key: const Key('transfer-pin-reset'),
+              onPressed: onReset,
+              style: FilledButton.styleFrom(
+                foregroundColor: const Color(0xFF111827),
+                backgroundColor: const Color(0xFFF3F6FA),
+                shape: const StadiumBorder(),
+                elevation: 0,
+              ),
+              child: const Text(
+                '비밀번호 재설정',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.6,
+                ),
+              ),
+            ),
+          ),
         Positioned(
           left: 0,
           right: 0,
@@ -2494,7 +2688,7 @@ class _TransferPinPage extends StatelessWidget {
                         (value) => _PinKey(
                           key: Key('transfer-pin-key-$value'),
                           label: value,
-                          onTap: () => onDigit(value),
+                          onTap: inputEnabled ? () => onDigit(value) : null,
                         ),
                       ),
                   Transform.translate(
@@ -2505,17 +2699,17 @@ class _TransferPinPage extends StatelessWidget {
                       fontSize: 21,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 2.5,
-                      onTap: onRearrange,
+                      onTap: inputEnabled ? onRearrange : null,
                     ),
                   ),
                   _PinKey(
                     key: Key('transfer-pin-key-${padKeys[9]}'),
                     label: padKeys[9],
-                    onTap: () => onDigit(padKeys[9]),
+                    onTap: inputEnabled ? () => onDigit(padKeys[9]) : null,
                   ),
                   IconButton(
                     key: const Key('transfer-pin-delete'),
-                    onPressed: onDelete,
+                    onPressed: inputEnabled ? onDelete : null,
                     icon: Transform.translate(
                       offset: const Offset(0, 2),
                       child: const Icon(
@@ -2547,7 +2741,7 @@ class _PinKey extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final double fontSize;
   final FontWeight fontWeight;
   final double letterSpacing;

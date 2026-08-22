@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:super_sol/core/app_data.dart';
 import 'package:super_sol/core/auth_service.dart';
+import 'package:super_sol/core/pin_security.dart';
 import 'package:super_sol/ui/account_details_screen.dart';
 import 'package:super_sol/ui/home_screen.dart';
 import 'package:super_sol/ui/pin_screen.dart';
@@ -27,6 +28,7 @@ void main() {
   ) async {
     _configureMockupViewport(tester);
     final auth = _GoldenAuthService();
+    await auth.setPin(PinPurpose.appAccess, '123456');
 
     await tester.pumpWidget(
       _host(SplashScreen(auth: auth, autoContinue: false)),
@@ -43,6 +45,18 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/2_pin.png'),
+    );
+
+    for (var index = 0; index < 6; index++) {
+      await tester.tap(find.byKey(const Key('app-pin-key-0')));
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
+    expect(find.text('비밀번호가 일치하지 않아요. (1/5)'), findsOneWidget);
+    expect(find.byKey(const Key('app-pin-reset')), findsOneWidget);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/17_app_pin_error.png'),
     );
 
     await tester.pumpWidget(
@@ -269,6 +283,8 @@ void main() {
   ) async {
     _configureMockupViewport(tester);
     final store = AppDataStore.inMemory(withMockData: false);
+    final auth = _GoldenAuthService();
+    await auth.setPin(PinPurpose.transfer, '1234');
     addTearDown(store.dispose);
     await store.saveAccount(
       BankAccount(
@@ -295,6 +311,7 @@ void main() {
       _host(
         TransferRecipientScreen(
           dataStore: store,
+          auth: auth,
           initialPinKeys: const [
             '3',
             '2',
@@ -332,6 +349,18 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/14_transfer_pin.png'),
+    );
+
+    for (var index = 0; index < 4; index++) {
+      await tester.tap(find.byKey(const Key('transfer-pin-key-0')));
+    }
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(find.text('비밀번호가 일치하지 않아요. (1/5)'), findsOneWidget);
+    expect(find.byKey(const Key('transfer-pin-reset')), findsOneWidget);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/18_transfer_pin_error.png'),
     );
   });
 
@@ -409,6 +438,9 @@ void main() {
 }
 
 class _GoldenAuthService extends AuthService {
+  _GoldenAuthService()
+    : super(pinSecurity: PinSecurityService(store: MemoryPinValueStore()));
+
   @override
   String? get currentEmail => 'test@gmail.com';
 

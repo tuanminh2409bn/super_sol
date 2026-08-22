@@ -11,16 +11,42 @@ Future<bool> showAuthSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => _AuthSheet(auth: auth, initialMode: initialMode),
+    builder: (context) => _AuthSheet(
+      auth: auth,
+      initialMode: initialMode,
+      reauthenticateOnly: false,
+    ),
+  );
+  return result ?? false;
+}
+
+Future<bool> showFirebaseReauthenticationSheet(
+  BuildContext context, {
+  required AuthService auth,
+}) async {
+  final result = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => _AuthSheet(
+      auth: auth,
+      initialMode: AuthMode.signIn,
+      reauthenticateOnly: true,
+    ),
   );
   return result ?? false;
 }
 
 class _AuthSheet extends StatefulWidget {
-  const _AuthSheet({required this.auth, required this.initialMode});
+  const _AuthSheet({
+    required this.auth,
+    required this.initialMode,
+    required this.reauthenticateOnly,
+  });
 
   final AuthService auth;
   final AuthMode initialMode;
+  final bool reauthenticateOnly;
 
   @override
   State<_AuthSheet> createState() => _AuthSheetState();
@@ -33,6 +59,14 @@ class _AuthSheetState extends State<_AuthSheet> {
   late AuthMode _mode = widget.initialMode;
   bool _busy = false;
   String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.reauthenticateOnly) {
+      _emailController.text = widget.auth.currentEmail ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -48,14 +82,19 @@ class _AuthSheetState extends State<_AuthSheet> {
       _busy = true;
       _message = null;
     });
-    final result = await widget.auth.authenticate(
-      mode: _mode,
-      email: _emailController.text,
-      password: _passwordController.text,
-      displayName: _mode == AuthMode.register
-          ? _displayNameController.text
-          : null,
-    );
+    final result = widget.reauthenticateOnly
+        ? await widget.auth.reauthenticate(
+            email: _emailController.text,
+            password: _passwordController.text,
+          )
+        : await widget.auth.authenticate(
+            mode: _mode,
+            email: _emailController.text,
+            password: _passwordController.text,
+            displayName: _mode == AuthMode.register
+                ? _displayNameController.text
+                : null,
+          );
     if (!mounted) return;
     if (result.ok) {
       Navigator.of(context).pop(true);
@@ -94,7 +133,11 @@ class _AuthSheetState extends State<_AuthSheet> {
             ),
             const SizedBox(height: 22),
             Text(
-              _mode == AuthMode.signIn ? 'Đăng nhập' : 'Tạo tài khoản',
+              widget.reauthenticateOnly
+                  ? 'Xác thực tài khoản Firebase'
+                  : _mode == AuthMode.signIn
+                  ? 'Đăng nhập'
+                  : 'Tạo tài khoản',
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w700,
@@ -103,7 +146,9 @@ class _AuthSheetState extends State<_AuthSheet> {
             ),
             const SizedBox(height: 8),
             Text(
-              widget.auth.firebaseReady
+              widget.reauthenticateOnly
+                  ? 'Nhập lại mật khẩu của đúng tài khoản đang đăng nhập để đặt lại PIN.'
+                  : widget.auth.firebaseReady
                   ? 'Tài khoản được bảo vệ bởi Firebase Authentication.'
                   : 'Chế độ phát triển cục bộ — thêm cấu hình Firebase để dùng production.',
               style: const TextStyle(
@@ -129,9 +174,11 @@ class _AuthSheetState extends State<_AuthSheet> {
               const SizedBox(height: 12),
             ],
             TextField(
+              key: const Key('auth-email'),
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               autocorrect: false,
+              readOnly: widget.reauthenticateOnly,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 border: OutlineInputBorder(),
@@ -139,6 +186,7 @@ class _AuthSheetState extends State<_AuthSheet> {
             ),
             const SizedBox(height: 12),
             TextField(
+              key: const Key('auth-password'),
               controller: _passwordController,
               obscureText: true,
               onSubmitted: (_) => _submit(),
@@ -156,6 +204,9 @@ class _AuthSheetState extends State<_AuthSheet> {
             ],
             const SizedBox(height: 18),
             FilledButton(
+              key: widget.reauthenticateOnly
+                  ? const Key('reauthenticate-submit')
+                  : const Key('authenticate-submit'),
               onPressed: _busy ? null : _submit,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF075FF7),
@@ -174,28 +225,33 @@ class _AuthSheetState extends State<_AuthSheet> {
                       ),
                     )
                   : Text(
-                      _mode == AuthMode.signIn ? 'Đăng nhập' : 'Đăng ký',
+                      widget.reauthenticateOnly
+                          ? 'Xác nhận'
+                          : _mode == AuthMode.signIn
+                          ? 'Đăng nhập'
+                          : 'Đăng ký',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
             ),
-            TextButton(
-              onPressed: _busy
-                  ? null
-                  : () => setState(() {
-                      _mode = _mode == AuthMode.signIn
-                          ? AuthMode.register
-                          : AuthMode.signIn;
-                      _message = null;
-                    }),
-              child: Text(
-                _mode == AuthMode.signIn
-                    ? 'Chưa có tài khoản? Đăng ký'
-                    : 'Đã có tài khoản? Đăng nhập',
+            if (!widget.reauthenticateOnly)
+              TextButton(
+                onPressed: _busy
+                    ? null
+                    : () => setState(() {
+                        _mode = _mode == AuthMode.signIn
+                            ? AuthMode.register
+                            : AuthMode.signIn;
+                        _message = null;
+                      }),
+                child: Text(
+                  _mode == AuthMode.signIn
+                      ? 'Chưa có tài khoản? Đăng ký'
+                      : 'Đã có tài khoản? Đăng nhập',
+                ),
               ),
-            ),
           ],
         ),
       ),

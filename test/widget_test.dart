@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:super_sol/core/app_data.dart';
 import 'package:super_sol/core/auth_service.dart';
+import 'package:super_sol/core/pin_security.dart';
 import 'package:super_sol/main.dart';
 import 'package:super_sol/ui/account_details_screen.dart';
 import 'package:super_sol/ui/auth_sheet.dart';
@@ -50,6 +51,68 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Đăng nhập'), findsWidgets);
+  });
+
+  testWidgets(
+    'app PIN reports consecutive failures and accepts the saved PIN',
+    (tester) async {
+      _configureMockupViewport(tester);
+      final auth = _SignedInAuthService();
+      await auth.setPin(PinPurpose.appAccess, '123456');
+      await tester.pumpWidget(_TestHost(home: PinScreen(auth: auth)));
+      await tester.pumpAndSettle();
+
+      await _enterAppPin(tester, '000000');
+      expect(find.text('비밀번호가 일치하지 않아요. (1/5)'), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+
+      await _enterAppPin(tester, '000000');
+      expect(find.text('비밀번호가 일치하지 않아요. (2/5)'), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+
+      await _enterAppPin(tester, '123456');
+      expect(find.byType(HomeScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('app PIN reset requires the current Firebase account', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final auth = _SignedInAuthService();
+    await auth.setPin(PinPurpose.appAccess, '123456');
+    await tester.pumpWidget(_TestHost(home: PinScreen(auth: auth)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('app-pin-reset')));
+    await tester.pumpAndSettle();
+    expect(find.text('Xác thực tài khoản Firebase'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byKey(const Key('auth-email'))).readOnly,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('auth-email')))
+          .controller
+          ?.text,
+      'test@gmail.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('auth-password')),
+      'firebase-secret',
+    );
+    await tester.tap(find.byKey(const Key('reauthenticate-submit')));
+    await tester.pumpAndSettle();
+
+    expect(auth.reauthenticated, isTrue);
+    expect(find.text('신한인증서 비밀번호를\n설정해주세요'), findsOneWidget);
+    await _enterAppPin(tester, '654321');
+    expect(find.text('비밀번호를 다시\n입력해주세요'), findsOneWidget);
+    await _enterAppPin(tester, '654321');
+    expect(find.byType(HomeScreen), findsOneWidget);
+    final verification = await auth.verifyPin(PinPurpose.appAccess, '654321');
+    expect(verification.matched, isTrue);
   });
 
   testWidgets('home scrolls continuously through states 3.2 and 3.3', (
@@ -731,9 +794,9 @@ void main() {
     tester,
   ) async {
     _configureMockupViewport(tester);
-    await tester.pumpWidget(
-      _TestHost(home: HomeScreen(auth: _SignedInAuthService())),
-    );
+    final auth = _SignedInAuthService();
+    await auth.setPin(PinPurpose.transfer, '0123');
+    await tester.pumpWidget(_TestHost(home: HomeScreen(auth: auth)));
 
     await tester.tap(find.byKey(const Key('home-transfer')));
     await tester.pumpAndSettle();
@@ -1199,6 +1262,40 @@ void main() {
     expect(find.byKey(const Key('transfer-pin-keypad')), findsOneWidget);
   });
 
+  testWidgets(
+    'transfer PIN shows attempts and only continues on the saved PIN',
+    (tester) async {
+      _configureMockupViewport(tester);
+      final auth = _SignedInAuthService();
+      await auth.setPin(PinPurpose.transfer, '1234');
+      await _openTransferPinScreen(
+        tester,
+        platform: TargetPlatform.android,
+        auth: auth,
+      );
+
+      for (final digit in '0000'.split('')) {
+        await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
+      }
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('비밀번호가 일치하지 않아요. (1/5)'), findsOneWidget);
+      expect(find.byKey(const Key('transfer-pin-reset')), findsOneWidget);
+      expect(find.text('DEP20180'), findsNothing);
+
+      for (final digit in '0000'.split('')) {
+        await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
+      }
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('비밀번호가 일치하지 않아요. (2/5)'), findsOneWidget);
+
+      for (final digit in '1234'.split('')) {
+        await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('DEP20180'), findsOneWidget);
+    },
+  );
+
   testWidgets('recipient search and favorite controls update real data', (
     tester,
   ) async {
@@ -1649,9 +1746,11 @@ void main() {
         .transactionsFor(accountId)
         .map((transaction) => transaction.id)
         .toList();
+    final auth = _SignedInAuthService();
+    await auth.setPin(PinPurpose.transfer, '0123');
     await tester.pumpWidget(
       _TestHost(
-        home: HomeScreen(auth: _SignedInAuthService(), dataStore: store),
+        home: HomeScreen(auth: auth, dataStore: store),
       ),
     );
 
@@ -1771,12 +1870,14 @@ void main() {
 Future<void> _openTransferPinScreen(
   WidgetTester tester, {
   required TargetPlatform platform,
+  AuthService? auth,
 }) async {
   await tester.pumpWidget(
     _TestHost(
       platform: platform,
       home: TransferRecipientScreen(
         dataStore: AppDataStore.inMemory(),
+        auth: auth,
         initialPinKeys: const [
           '0',
           '1',
@@ -1799,6 +1900,14 @@ Future<void> _openTransferPinScreen(
   await tester.tap(find.byKey(const Key('transfer-next')));
   await tester.pump();
   await tester.tap(find.byKey(const Key('transfer-next')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _enterAppPin(WidgetTester tester, String pin) async {
+  for (final digit in pin.split('')) {
+    await tester.tap(find.byKey(Key('app-pin-key-$digit')));
+  }
+  await tester.pump(const Duration(milliseconds: 200));
   await tester.pumpAndSettle();
 }
 
@@ -1866,9 +1975,11 @@ class _RegisteringAuthService extends AuthService {
 }
 
 class _SignedInAuthService extends AuthService {
-  _SignedInAuthService({this.name = 'TRINHTRUNGMINH'});
+  _SignedInAuthService({this.name = 'TRINHTRUNGMINH'})
+    : super(pinSecurity: PinSecurityService(store: MemoryPinValueStore()));
 
   bool signedOut = false;
+  bool reauthenticated = false;
   final String name;
 
   @override
@@ -1876,6 +1987,19 @@ class _SignedInAuthService extends AuthService {
 
   @override
   String get displayName => name;
+
+  @override
+  Future<AuthResult> reauthenticate({
+    required String email,
+    required String password,
+  }) async {
+    final matches = email == currentEmail && password == 'firebase-secret';
+    reauthenticated = matches;
+    return AuthResult(
+      ok: matches,
+      message: matches ? 'Thành công.' : 'Email hoặc mật khẩu không đúng.',
+    );
+  }
 
   @override
   Future<void> signOut() async {

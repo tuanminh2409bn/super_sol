@@ -6,6 +6,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'pin_security.dart';
+
 enum AuthMode { signIn, register }
 
 class AuthResult {
@@ -21,6 +23,9 @@ class AuthResult {
 /// app remains fully testable with a deliberately small local-development
 /// fallback. The fallback never stores the clear-text password.
 class AuthService {
+  AuthService({PinSecurityService? pinSecurity})
+    : _pinSecurity = pinSecurity ?? PinSecurityService();
+
   static const _emailKey = 'super_sol_local_email';
   static const _passwordKey = 'super_sol_local_password_digest';
   static const _displayNameKey = 'super_sol_local_display_name';
@@ -34,6 +39,7 @@ class AuthService {
   bool _firebaseReady = false;
   User? _firebaseUser;
   StreamSubscription<User?>? _firebaseAuthStateSubscription;
+  final PinSecurityService _pinSecurity;
 
   bool get firebaseReady => _firebaseReady;
 
@@ -235,6 +241,101 @@ class AuthService {
     );
   }
 
+  Future<AuthResult> reauthenticate({
+    required String email,
+    required String password,
+  }) async {
+    final signedInEmail = currentEmail?.trim().toLowerCase();
+    final normalizedEmail = email.trim().toLowerCase();
+    if (signedInEmail == null || normalizedEmail != signedInEmail) {
+      return const AuthResult(
+        ok: false,
+        message: 'Vui lòng đăng nhập đúng tài khoản Firebase hiện tại.',
+      );
+    }
+    if (password.length < 6) {
+      return const AuthResult(
+        ok: false,
+        message: 'Mật khẩu cần có ít nhất 6 ký tự.',
+      );
+    }
+
+    if (_firebaseReady) {
+      final user = _firebaseUser ?? FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        return const AuthResult(
+          ok: false,
+          message: 'Phiên Firebase không còn hiệu lực. Vui lòng đăng nhập lại.',
+        );
+      }
+      try {
+        final credential = EmailAuthProvider.credential(
+          email: normalizedEmail,
+          password: password,
+        );
+        final result = await user.reauthenticateWithCredential(credential);
+        _firebaseUser = result.user ?? user;
+        return const AuthResult(ok: true, message: 'Xác thực lại thành công.');
+      } on FirebaseAuthException catch (error) {
+        return AuthResult(ok: false, message: _firebaseMessage(error.code));
+      } catch (_) {
+        return const AuthResult(
+          ok: false,
+          message: 'Không thể kết nối Firebase. Vui lòng thử lại.',
+        );
+      }
+    }
+
+    if (!kDebugMode) {
+      return const AuthResult(
+        ok: false,
+        message: 'Firebase chưa khởi tạo. Không thể đặt lại mật khẩu.',
+      );
+    }
+    final savedEmail = _preferences?.getString(_emailKey);
+    final savedDigest = _preferences?.getString(_passwordKey);
+    if (savedEmail != normalizedEmail || savedDigest != _digest(password)) {
+      return const AuthResult(
+        ok: false,
+        message: 'Email hoặc mật khẩu không đúng.',
+      );
+    }
+    return const AuthResult(
+      ok: true,
+      message: 'Xác thực lại thành công ở chế độ phát triển.',
+    );
+  }
+
+  Future<PinStatus> pinStatus(PinPurpose purpose) {
+    return _pinSecurity.status(
+      accountScope: _requiredPinScope,
+      purpose: purpose,
+    );
+  }
+
+  Future<void> setPin(PinPurpose purpose, String pin) {
+    return _pinSecurity.setPin(
+      accountScope: _requiredPinScope,
+      purpose: purpose,
+      pin: pin,
+    );
+  }
+
+  Future<PinVerificationResult> verifyPin(PinPurpose purpose, String pin) {
+    return _pinSecurity.verify(
+      accountScope: _requiredPinScope,
+      purpose: purpose,
+      pin: pin,
+    );
+  }
+
+  Future<void> clearPin(PinPurpose purpose) {
+    return _pinSecurity.clear(
+      accountScope: _requiredPinScope,
+      purpose: purpose,
+    );
+  }
+
   Future<void> signOut() async {
     if (_firebaseReady) {
       await FirebaseAuth.instance.signOut();
@@ -246,6 +347,13 @@ class AuthService {
 
   Future<void> _cacheFirebaseSessionHint(User user) async {
     await _preferences?.setString(_firebaseSessionHintKey, user.uid);
+  }
+
+  String get _requiredPinScope {
+    if (!isSignedIn) {
+      throw StateError('A signed-in account is required for PIN access.');
+    }
+    return dataScope;
   }
 
   String _digest(String value) {

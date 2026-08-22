@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../core/auth_service.dart';
 import '../core/data_bootstrap.dart';
+import '../core/pin_security.dart';
 import 'auth_sheet.dart';
 import 'design_canvas.dart';
 import 'home_screen.dart';
@@ -17,31 +19,144 @@ class PinScreen extends StatefulWidget {
   State<PinScreen> createState() => _PinScreenState();
 }
 
+enum _AccessPinMode { loading, legacy, verify, create, confirm }
+
 class _PinScreenState extends State<PinScreen> {
   final List<int> _digits = [];
   bool _navigating = false;
+  bool _busy = false;
+  _AccessPinMode _mode = _AccessPinMode.loading;
+  String? _pendingPin;
+  String? _setupError;
+  int _failedAttempts = 0;
 
   @override
   void initState() {
     super.initState();
     showDeviceStatusBar(darkIcons: true, backgroundColor: Colors.white);
+    unawaited(_loadPinState());
   }
 
   void _addDigit(int digit) {
-    if (_digits.length == 6 || _navigating) return;
+    if (_digits.length == 6 || _navigating || _busy || _inputLocked) return;
     setState(() => _digits.add(digit));
     if (_digits.length == 6) {
-      Future<void>.delayed(const Duration(milliseconds: 150), _openHome);
+      Future<void>.delayed(const Duration(milliseconds: 150), _submitPin);
     }
   }
 
   void _removeDigit() {
-    if (_digits.isEmpty || _navigating) return;
+    if (_digits.isEmpty || _navigating || _busy || _inputLocked) return;
     setState(() => _digits.removeLast());
   }
 
   void _shuffle() {
-    setState(_digits.clear);
+    if (_busy || _inputLocked) return;
+    setState(() {
+      _digits.clear();
+      _setupError = null;
+    });
+  }
+
+  bool get _inputLocked =>
+      _mode == _AccessPinMode.loading ||
+      (_mode == _AccessPinMode.verify &&
+          _failedAttempts >= PinSecurityService.maxAttempts);
+
+  String get _enteredPin => _digits.join();
+
+  String get _title => switch (_mode) {
+    _AccessPinMode.create => '신한인증서 비밀번호를\n설정해주세요',
+    _AccessPinMode.confirm => '비밀번호를 다시\n입력해주세요',
+    _ => '신한인증서 비밀번호를\n입력해주세요',
+  };
+
+  String? get _errorMessage {
+    if (_setupError != null) return _setupError;
+    if (_mode != _AccessPinMode.verify || _failedAttempts == 0) return null;
+    return '비밀번호가 일치하지 않아요. ($_failedAttempts/${PinSecurityService.maxAttempts})';
+  }
+
+  Future<void> _loadPinState() async {
+    if (!widget.auth.isSignedIn) {
+      if (mounted) setState(() => _mode = _AccessPinMode.legacy);
+      return;
+    }
+    final status = await widget.auth.pinStatus(PinPurpose.appAccess);
+    if (!mounted) return;
+    setState(() {
+      _digits.clear();
+      _pendingPin = null;
+      _setupError = null;
+      _failedAttempts = status.failedAttempts;
+      _mode = status.configured ? _AccessPinMode.verify : _AccessPinMode.create;
+    });
+  }
+
+  Future<void> _submitPin() async {
+    if (!mounted || _busy || _digits.length != 6) return;
+    final pin = _enteredPin;
+    switch (_mode) {
+      case _AccessPinMode.loading:
+        return;
+      case _AccessPinMode.legacy:
+        _openHome();
+        return;
+      case _AccessPinMode.create:
+        setState(() {
+          _pendingPin = pin;
+          _digits.clear();
+          _setupError = null;
+          _mode = _AccessPinMode.confirm;
+        });
+        return;
+      case _AccessPinMode.confirm:
+        if (_pendingPin != pin) {
+          setState(() {
+            _digits.clear();
+            _setupError = '비밀번호가 일치하지 않아요. 다시 입력해주세요.';
+          });
+          return;
+        }
+        setState(() => _busy = true);
+        await widget.auth.setPin(PinPurpose.appAccess, pin);
+        if (!mounted) return;
+        _openHome();
+        return;
+      case _AccessPinMode.verify:
+        setState(() => _busy = true);
+        final result = await widget.auth.verifyPin(PinPurpose.appAccess, pin);
+        if (!mounted) return;
+        if (result.matched) {
+          _openHome();
+          return;
+        }
+        setState(() {
+          _busy = false;
+          _digits.clear();
+          _failedAttempts = result.failedAttempts;
+        });
+    }
+  }
+
+  Future<void> _resetPin() async {
+    if (_busy || !widget.auth.isSignedIn) return;
+    final authenticated = await showFirebaseReauthenticationSheet(
+      context,
+      auth: widget.auth,
+    );
+    if (!authenticated || !mounted) return;
+    setState(() => _busy = true);
+    await widget.auth.clearPin(PinPurpose.appAccess);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _digits.clear();
+      _pendingPin = null;
+      _setupError = null;
+      _failedAttempts = 0;
+      _mode = _AccessPinMode.create;
+    });
   }
 
   Future<void> _goBack() async {
@@ -76,7 +191,7 @@ class _PinScreenState extends State<PinScreen> {
     final authenticated = await showAuthSheet(context, auth: widget.auth);
     if (authenticated && mounted) {
       await initializeUserData(widget.auth);
-      _openHome();
+      await _loadPinState();
     }
   }
 
@@ -135,14 +250,14 @@ class _PinScreenState extends State<PinScreen> {
                       ),
                     ),
                   ),
-                  const Positioned(
+                  Positioned(
                     left: 100,
                     right: 100,
                     top: 276,
                     height: 110,
                     child: Center(
                       child: Text(
-                        '신한인증서 비밀번호를\n입력해주세요',
+                        _title,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Color(0xFF11141C),
@@ -184,6 +299,53 @@ class _PinScreenState extends State<PinScreen> {
                       }),
                     ),
                   ),
+                  if (_errorMessage case final message?)
+                    Positioned(
+                      key: const Key('app-pin-error'),
+                      left: 70,
+                      right: 70,
+                      top: 482,
+                      height: 45,
+                      child: Center(
+                        child: Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFE33232),
+                            fontSize: 22,
+                            fontWeight: FontWeight.w500,
+                            fontVariations: [FontVariation('wght', 500)],
+                            letterSpacing: -.7,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_mode == _AccessPinMode.verify)
+                    Positioned(
+                      left: 204,
+                      top: 735,
+                      width: 181,
+                      height: 58,
+                      child: FilledButton(
+                        key: const Key('app-pin-reset'),
+                        onPressed: _busy ? null : _resetPin,
+                        style: FilledButton.styleFrom(
+                          foregroundColor: const Color(0xFF111827),
+                          backgroundColor: const Color(0xFFF3F6FA),
+                          disabledBackgroundColor: const Color(0xFFF3F6FA),
+                          shape: const StadiumBorder(),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          '비밀번호 재설정',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.6,
+                          ),
+                        ),
+                      ),
+                    ),
                   Positioned(
                     left: 0,
                     top: 829,
@@ -192,60 +354,70 @@ class _PinScreenState extends State<PinScreen> {
                     child: Stack(
                       children: [
                         _Key(
+                          key: const Key('app-pin-key-8'),
                           x: 52,
                           y: 10,
                           label: '8',
                           onTap: () => _addDigit(8),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-9'),
                           x: 248,
                           y: 10,
                           label: '9',
                           onTap: () => _addDigit(9),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-7'),
                           x: 444,
                           y: 10,
                           label: '7',
                           onTap: () => _addDigit(7),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-1'),
                           x: 52,
                           y: 100,
                           label: '1',
                           onTap: () => _addDigit(1),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-5'),
                           x: 248,
                           y: 100,
                           label: '5',
                           onTap: () => _addDigit(5),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-0'),
                           x: 444,
                           y: 100,
                           label: '0',
                           onTap: () => _addDigit(0),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-2'),
                           x: 52,
                           y: 190,
                           label: '2',
                           onTap: () => _addDigit(2),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-6'),
                           x: 248,
                           y: 190,
                           label: '6',
                           onTap: () => _addDigit(6),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-4'),
                           x: 444,
                           y: 190,
                           label: '4',
                           onTap: () => _addDigit(4),
                         ),
                         _Key(
+                          key: const Key('app-pin-key-3'),
                           x: 248,
                           y: 280,
                           label: '3',
@@ -257,6 +429,7 @@ class _PinScreenState extends State<PinScreen> {
                           width: 96,
                           height: 54,
                           child: TextButton(
+                            key: const Key('app-pin-rearrange'),
                             onPressed: _shuffle,
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.white,
@@ -278,6 +451,7 @@ class _PinScreenState extends State<PinScreen> {
                           width: 67,
                           height: 51,
                           child: IconButton(
+                            key: const Key('app-pin-delete'),
                             onPressed: _removeDigit,
                             padding: EdgeInsets.zero,
                             icon: const Icon(
@@ -334,6 +508,7 @@ class _PinScreenState extends State<PinScreen> {
 
 class _Key extends StatelessWidget {
   const _Key({
+    super.key,
     required this.x,
     required this.y,
     required this.label,
