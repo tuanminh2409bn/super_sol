@@ -1530,7 +1530,7 @@ void main() {
       await store.createRecipient(
         displayName: 'HO XUAN TH',
         bankCode: '신한',
-        accountNumber: '69191044058207',
+        accountNumber: '691-910-44058207',
       );
 
       await tester.pumpWidget(
@@ -1556,6 +1556,7 @@ void main() {
       await tester.tap(find.byKey(const Key('transfer-next')));
       await tester.pumpAndSettle();
       expect(find.text('HO XUAN TH님 계좌로'), findsOneWidget);
+      expect(find.text('신한 691-910-44058207'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('amount-key-1')));
       await tester.pump();
@@ -1563,6 +1564,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('HO XUAN TH님 계좌로\n1원 보낼까요?'), findsOneWidget);
       expect(find.text('아래 계좌'), findsNothing);
+      expect(find.text('신한 69191044058207'), findsOneWidget);
+      expect(find.text('신한 691-910-44058207'), findsNothing);
     },
   );
 

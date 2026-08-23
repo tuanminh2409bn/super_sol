@@ -253,6 +253,10 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   void _continueManualEntry() {
     final recipient = _matchingManualRecipient;
     setState(() {
+      // Matching ignores separators so a digits-only manual entry can still
+      // restore the exact presentation saved for this recipient. The amount
+      // screen mirrors that saved account number, including hyphens.
+      if (recipient != null) _account = recipient.account;
       _recipientName = recipient?.name;
       _destinationAccountId = recipient?.internalAccountId;
       _stage = _TransferStage.amount;
@@ -559,7 +563,9 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                 _TransferReviewPage(
                   sourceAccount: sourceAccount!,
                   bank: _bank ?? '토스뱅크',
-                  account: _account,
+                  // The final review intentionally follows the banking
+                  // reference and shows the destination as digits only.
+                  account: AppDataStore.normalizedAccountNumber(_account),
                   recipientName: _recipientName,
                   recipientUsesHonorific: _destinationAccountId == null,
                   amount: _amount,
