@@ -22,7 +22,22 @@ class PinScreen extends StatefulWidget {
 enum _AccessPinMode { loading, legacy, verify, create, confirm }
 
 class _PinScreenState extends State<PinScreen> {
+  static const _initialKeypadDigits = <int>[8, 9, 7, 1, 5, 0, 2, 6, 4, 3];
+  static const _keypadPositions = <Offset>[
+    Offset(52, 10),
+    Offset(248, 10),
+    Offset(444, 10),
+    Offset(52, 100),
+    Offset(248, 100),
+    Offset(444, 100),
+    Offset(52, 190),
+    Offset(248, 190),
+    Offset(444, 190),
+    Offset(248, 280),
+  ];
+
   final List<int> _digits = [];
+  final List<int> _keypadDigits = List<int>.of(_initialKeypadDigits);
   bool _navigating = false;
   bool _busy = false;
   _AccessPinMode _mode = _AccessPinMode.loading;
@@ -53,8 +68,17 @@ class _PinScreenState extends State<PinScreen> {
   void _shuffle() {
     if (_busy || _inputLocked) return;
     setState(() {
-      _digits.clear();
-      _setupError = null;
+      final previousOrder = List<int>.of(_keypadDigits);
+      _keypadDigits.shuffle();
+      final orderDidNotChange = List.generate(
+        _keypadDigits.length,
+        (index) => _keypadDigits[index] == previousOrder[index],
+      ).every((matches) => matches);
+      if (orderDidNotChange) {
+        final first = _keypadDigits[0];
+        _keypadDigits[0] = _keypadDigits[1];
+        _keypadDigits[1] = first;
+      }
     });
   }
 
@@ -353,76 +377,18 @@ class _PinScreenState extends State<PinScreen> {
                     bottom: 0,
                     child: Stack(
                       children: [
-                        _Key(
-                          key: const Key('app-pin-key-8'),
-                          x: 52,
-                          y: 10,
-                          label: '8',
-                          onTap: () => _addDigit(8),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-9'),
-                          x: 248,
-                          y: 10,
-                          label: '9',
-                          onTap: () => _addDigit(9),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-7'),
-                          x: 444,
-                          y: 10,
-                          label: '7',
-                          onTap: () => _addDigit(7),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-1'),
-                          x: 52,
-                          y: 100,
-                          label: '1',
-                          onTap: () => _addDigit(1),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-5'),
-                          x: 248,
-                          y: 100,
-                          label: '5',
-                          onTap: () => _addDigit(5),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-0'),
-                          x: 444,
-                          y: 100,
-                          label: '0',
-                          onTap: () => _addDigit(0),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-2'),
-                          x: 52,
-                          y: 190,
-                          label: '2',
-                          onTap: () => _addDigit(2),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-6'),
-                          x: 248,
-                          y: 190,
-                          label: '6',
-                          onTap: () => _addDigit(6),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-4'),
-                          x: 444,
-                          y: 190,
-                          label: '4',
-                          onTap: () => _addDigit(4),
-                        ),
-                        _Key(
-                          key: const Key('app-pin-key-3'),
-                          x: 248,
-                          y: 280,
-                          label: '3',
-                          onTap: () => _addDigit(3),
-                        ),
+                        for (
+                          var index = 0;
+                          index < _keypadDigits.length;
+                          index++
+                        )
+                          _Key(
+                            key: Key('app-pin-key-${_keypadDigits[index]}'),
+                            x: _keypadPositions[index].dx,
+                            y: _keypadPositions[index].dy,
+                            label: '${_keypadDigits[index]}',
+                            onTap: () => _addDigit(_keypadDigits[index]),
+                          ),
                         Positioned(
                           left: 50,
                           top: 284,
@@ -439,8 +405,7 @@ class _PinScreenState extends State<PinScreen> {
                               '재배열',
                               style: TextStyle(
                                 fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                                shadows: _bluePanelTextStroke,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -539,9 +504,8 @@ class _Key extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 32,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             height: 1,
-            shadows: _bluePanelTextStroke,
           ),
         ),
       ),

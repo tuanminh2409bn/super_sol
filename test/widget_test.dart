@@ -41,7 +41,7 @@ void main() {
     expect(find.text('ĐĂNG NHẬP'), findsOneWidget);
   });
 
-  testWidgets('login PIN digits and rearrange label use the bold font', (
+  testWidgets('login PIN digits and rearrange label use weight 600', (
     tester,
   ) async {
     _configureMockupViewport(tester);
@@ -60,8 +60,45 @@ void main() {
       ),
     );
 
-    expect(digitText.style?.fontWeight, FontWeight.w700);
-    expect(rearrangeText.style?.fontWeight, FontWeight.w700);
+    expect(digitText.style?.fontWeight, FontWeight.w600);
+    expect(digitText.style?.shadows, isNull);
+    expect(rearrangeText.style?.fontWeight, FontWeight.w600);
+    expect(rearrangeText.style?.shadows, isNull);
+  });
+
+  testWidgets('rearrange shuffles keys without clearing the entered PIN', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(_TestHost(home: PinScreen(auth: AuthService())));
+
+    final originalPositions = <String, Offset>{
+      for (final digit in '0123456789'.split(''))
+        digit: tester.getTopLeft(find.byKey(Key('app-pin-key-$digit'))),
+    };
+    await tester.tap(find.byKey(const Key('app-pin-key-8')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('app-pin-rearrange')));
+    await tester.pump();
+    final shuffledPositions = <String, Offset>{
+      for (final digit in '0123456789'.split(''))
+        digit: tester.getTopLeft(find.byKey(Key('app-pin-key-$digit'))),
+    };
+
+    expect(
+      shuffledPositions.entries.any(
+        (entry) => entry.value != originalPositions[entry.key],
+      ),
+      isTrue,
+    );
+    for (final digit in ['1', '2', '3', '4', '5']) {
+      await tester.tap(find.byKey(Key('app-pin-key-$digit')));
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomeScreen), findsOneWidget);
   });
 
   testWidgets('PIN back opens the login-method picker when there is no route', (
