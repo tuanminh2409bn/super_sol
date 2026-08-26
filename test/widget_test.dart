@@ -41,6 +41,29 @@ void main() {
     expect(find.text('ĐĂNG NHẬP'), findsOneWidget);
   });
 
+  testWidgets('login PIN digits and rearrange label use the bold font', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(_TestHost(home: PinScreen(auth: AuthService())));
+
+    final digitText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('app-pin-key-8')),
+        matching: find.text('8'),
+      ),
+    );
+    final rearrangeText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('app-pin-rearrange')),
+        matching: find.text('재배열'),
+      ),
+    );
+
+    expect(digitText.style?.fontWeight, FontWeight.w700);
+    expect(rearrangeText.style?.fontWeight, FontWeight.w700);
+  });
+
   testWidgets('PIN back opens the login-method picker when there is no route', (
     tester,
   ) async {

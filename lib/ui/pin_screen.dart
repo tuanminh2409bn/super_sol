@@ -439,7 +439,7 @@ class _PinScreenState extends State<PinScreen> {
                               '재배열',
                               style: TextStyle(
                                 fontSize: 22,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w700,
                                 shadows: _bluePanelTextStroke,
                               ),
                             ),
@@ -539,7 +539,7 @@ class _Key extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 32,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w700,
             height: 1,
             shadows: _bluePanelTextStroke,
           ),
