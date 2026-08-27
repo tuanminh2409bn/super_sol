@@ -144,6 +144,34 @@ void main() {
       matchesGoldenFile('goldens/4_2_account_scrolled.png'),
     );
 
+    await tester.tap(find.byKey(const Key('account-history-filter-collapsed')));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/19_history_filter.png'),
+    );
+    await tester.tap(find.byKey(const Key('history-period-monthly')));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/20_history_monthly_filter.png'),
+    );
+    await tester.tap(find.byKey(const Key('history-month-field')));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('history-month-wheel')),
+      const Offset(0, 116),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/21_history_month_picker.png'),
+    );
+    await tester.tap(find.byKey(const Key('history-month-picker-close')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-filter-close')));
+    await tester.pumpAndSettle();
+
     await tester.pumpWidget(_host(TransferRecipientScreen()));
     await _precache(tester, const [
       'assets/images/recipient_woori_mock.png',
@@ -361,6 +389,74 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/18_transfer_pin_error.png'),
+    );
+  });
+
+  testWidgets('June monthly history result matches the filtered reference', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    final auth = _GoldenAuthService();
+    addTearDown(store.dispose);
+    final account = await store.saveAccount(
+      BankAccount(
+        id: 'golden-monthly-history',
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TRINHTRUNGMINH',
+        accountNumber: '110-628-103680',
+        accountType: '[금융거래한도계좌2]저축예금',
+        openingBalance: 55246,
+        createdAt: DateTime(2026, 5, 1),
+      ),
+    );
+    for (final transaction in [
+      ('3973', 2, DateTime(2026, 6, 30, 23, 27, 57), '오픈뱅킹 이체'),
+      ('7629', 2, DateTime(2026, 6, 30, 23, 23, 11), '오픈뱅킹 이체'),
+      ('자연애마트', -16820, DateTime(2026, 6, 30, 20, 4, 52), '체크카드'),
+      ('정상희', -1500, DateTime(2026, 6, 30, 15, 38, 40), '모바일'),
+      ('안녕닭봉운본점', -30000, DateTime(2026, 6, 30, 1, 55, 26), '체크카드'),
+      ('한패스BUI', 50000, DateTime(2026, 6, 29, 23, 0), '타행모바일뱅킹'),
+      ('AUGUST HIDDEN', 1000, DateTime(2026, 8, 1, 12), '모바일'),
+    ]) {
+      await store.createTransaction(
+        accountId: account.id,
+        title: transaction.$1,
+        signedAmount: transaction.$2,
+        occurredAt: transaction.$3,
+        channel: transaction.$4,
+      );
+    }
+
+    await tester.pumpWidget(
+      _host(AccountDetailsScreen(auth: auth, dataStore: store)),
+    );
+    await _precache(tester, const [
+      'assets/images/bank_shinhan_transparent.png',
+    ]);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('account-history-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-period-monthly')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-month-field')));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('history-month-wheel')),
+      const Offset(0, 116),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-month-picker-apply')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-filter-apply')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2026년 06월 · 전체 · 최신순'), findsOneWidget);
+    expect(find.text('AUGUST HIDDEN'), findsNothing);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/22_history_june_results.png'),
     );
   });
 

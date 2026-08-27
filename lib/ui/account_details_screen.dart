@@ -24,6 +24,150 @@ const _detailsAccountTypeStyle = TextStyle(
   letterSpacing: -1,
 );
 
+enum _HistoryPeriodMode { monthly, range }
+
+enum _HistoryRangePreset { week, month, threeMonths, sixMonths }
+
+enum _HistoryType { all, deposit, withdrawal, shinhanAtm }
+
+enum _HistorySort { newest, oldest }
+
+@immutable
+class _HistoryFilter {
+  const _HistoryFilter({
+    required this.periodMode,
+    required this.rangePreset,
+    required this.startDate,
+    required this.endDate,
+    required this.month,
+    required this.type,
+    required this.sort,
+    this.minimumAmount,
+    this.maximumAmount,
+  });
+
+  factory _HistoryFilter.initial(DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+    return _HistoryFilter(
+      periodMode: _HistoryPeriodMode.range,
+      rangePreset: _HistoryRangePreset.threeMonths,
+      startDate: _subtractMonths(today, 3),
+      endDate: today,
+      month: DateTime(today.year, today.month),
+      type: _HistoryType.all,
+      sort: _HistorySort.newest,
+    );
+  }
+
+  final _HistoryPeriodMode periodMode;
+  final _HistoryRangePreset rangePreset;
+  final DateTime startDate;
+  final DateTime endDate;
+  final DateTime month;
+  final _HistoryType type;
+  final _HistorySort sort;
+  final int? minimumAmount;
+  final int? maximumAmount;
+
+  _HistoryFilter copyWith({
+    _HistoryPeriodMode? periodMode,
+    _HistoryRangePreset? rangePreset,
+    DateTime? startDate,
+    DateTime? endDate,
+    DateTime? month,
+    _HistoryType? type,
+    _HistorySort? sort,
+    int? minimumAmount,
+    int? maximumAmount,
+    bool clearMinimumAmount = false,
+    bool clearMaximumAmount = false,
+  }) {
+    return _HistoryFilter(
+      periodMode: periodMode ?? this.periodMode,
+      rangePreset: rangePreset ?? this.rangePreset,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      month: month ?? this.month,
+      type: type ?? this.type,
+      sort: sort ?? this.sort,
+      minimumAmount: clearMinimumAmount
+          ? null
+          : minimumAmount ?? this.minimumAmount,
+      maximumAmount: clearMaximumAmount
+          ? null
+          : maximumAmount ?? this.maximumAmount,
+    );
+  }
+
+  String get periodLabel => switch (periodMode) {
+    _HistoryPeriodMode.monthly =>
+      '${month.year}년 ${month.month.toString().padLeft(2, '0')}월',
+    _HistoryPeriodMode.range => switch (rangePreset) {
+      _HistoryRangePreset.week => '1주일',
+      _HistoryRangePreset.month => '1개월',
+      _HistoryRangePreset.threeMonths => '3개월',
+      _HistoryRangePreset.sixMonths => '6개월',
+    },
+  };
+
+  String get typeLabel => switch (type) {
+    _HistoryType.all => '전체',
+    _HistoryType.deposit => '입금',
+    _HistoryType.withdrawal => '출금',
+    _HistoryType.shinhanAtm => '신한 ATM',
+  };
+
+  String get sortLabel => sort == _HistorySort.newest ? '최신순' : '과거순';
+
+  String get summaryLabel => '$periodLabel · $typeLabel · $sortLabel';
+
+  List<LedgerTransaction> apply(List<LedgerTransaction> source) {
+    final filtered = source.where((transaction) {
+      final occurred = transaction.occurredAt;
+      final inPeriod = periodMode == _HistoryPeriodMode.monthly
+          ? occurred.year == month.year && occurred.month == month.month
+          : !occurred.isBefore(startDate) &&
+                occurred.isBefore(endDate.add(const Duration(days: 1)));
+      if (!inPeriod) return false;
+
+      final typeMatches = switch (type) {
+        _HistoryType.all => true,
+        _HistoryType.deposit => transaction.signedAmount >= 0,
+        _HistoryType.withdrawal => transaction.signedAmount < 0,
+        _HistoryType.shinhanAtm => transaction.channel.toUpperCase().contains(
+          'ATM',
+        ),
+      };
+      if (!typeMatches) return false;
+
+      final amount = transaction.signedAmount.abs();
+      if (minimumAmount != null && amount < minimumAmount!) return false;
+      if (maximumAmount != null && amount > maximumAmount!) return false;
+      return true;
+    }).toList();
+    filtered.sort((left, right) {
+      final comparison = left.occurredAt.compareTo(right.occurredAt);
+      if (comparison != 0) {
+        return sort == _HistorySort.newest ? -comparison : comparison;
+      }
+      return sort == _HistorySort.newest
+          ? right.id.compareTo(left.id)
+          : left.id.compareTo(right.id);
+    });
+    return filtered;
+  }
+}
+
+DateTime _subtractMonths(DateTime date, int months) {
+  final targetMonth = DateTime(date.year, date.month - months);
+  final lastDay = DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
+  return DateTime(
+    targetMonth.year,
+    targetMonth.month,
+    date.day > lastDay ? lastDay : date.day,
+  );
+}
+
 class AccountDetailsScreen extends StatefulWidget {
   AccountDetailsScreen({
     super.key,
@@ -45,12 +189,14 @@ class AccountDetailsScreen extends StatefulWidget {
 class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
   late final ScrollController _scrollController;
   late double _scrollOffset;
+  late _HistoryFilter _historyFilter;
 
   @override
   void initState() {
     super.initState();
     showDeviceStatusBar(darkIcons: true, backgroundColor: Colors.white);
     _scrollOffset = widget.initialScrollOffset;
+    _historyFilter = _HistoryFilter.initial(DateTime.now());
     _scrollController = ScrollController(
       initialScrollOffset: widget.initialScrollOffset,
     )..addListener(_handleScroll);
@@ -130,6 +276,47 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
     );
   }
 
+  Future<void> _openHistoryFilter() async {
+    final currentYear = DateTime.now().year;
+    final account = _selectedAccount;
+    final recordedYears = <int>{
+      _historyFilter.month.year,
+      currentYear - 3,
+      currentYear + 3,
+      if (account != null)
+        ...widget.dataStore
+            .transactionsFor(account.id)
+            .map((transaction) => transaction.occurredAt.year),
+    };
+    final firstYear = recordedYears.reduce(
+      (left, right) => left < right ? left : right,
+    );
+    final lastYear = recordedYears.reduce(
+      (left, right) => left > right ? left : right,
+    );
+    final availableYears = <int>[
+      for (var year = firstYear; year <= lastYear; year++) year,
+    ];
+    final nextFilter = await showModalBottomSheet<_HistoryFilter>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0x990F1420),
+      builder: (sheetContext) => MediaQuery(
+        data: MediaQuery.of(
+          sheetContext,
+        ).copyWith(textScaler: TextScaler.noScaling),
+        child: _HistoryFilterSheet(
+          initialFilter: _historyFilter,
+          availableYears: availableYears,
+        ),
+      ),
+    );
+    if (!mounted || nextFilter == null) return;
+    setState(() => _historyFilter = nextFilter);
+  }
+
   BankAccount? get _selectedAccount {
     final activeAccounts = widget.dataStore.accounts;
     final requested = widget.accountId;
@@ -149,9 +336,10 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
     final account = _selectedAccount;
     final accountType = _displayAccountType(account?.accountType);
     final accountSummaryOffset = _accountTypeWrapOffset(accountType);
-    final transactions = account == null
+    final allTransactions = account == null
         ? const <LedgerTransaction>[]
         : widget.dataStore.transactionsFor(account.id);
+    final transactions = _historyFilter.apply(allTransactions);
     final requiredContentHeight =
         _TransactionLayoutMetrics.contentBottom(
           transactions,
@@ -193,6 +381,8 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
                       transactions: transactions,
                       store: widget.dataStore,
                       verticalOffset: accountSummaryOffset,
+                      filterLabel: _historyFilter.summaryLabel,
+                      onFilterTap: _openHistoryFilter,
                     ),
                   ],
                 ),
@@ -221,7 +411,12 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
               height: 82,
               child: ColoredBox(color: Colors.white),
             ),
-            const _FilterBar(top: 214),
+            _FilterBar(
+              top: 214,
+              filterKey: const Key('account-history-filter-collapsed'),
+              label: _historyFilter.summaryLabel,
+              onTap: _openHistoryFilter,
+            ),
           ],
           _DetailsHeader(
             onBack: _goHome,
@@ -666,6 +861,8 @@ class _TransactionList extends StatelessWidget {
     required this.transactions,
     required this.store,
     required this.verticalOffset,
+    required this.filterLabel,
+    required this.onFilterTap,
   });
 
   final String accountName;
@@ -673,12 +870,19 @@ class _TransactionList extends StatelessWidget {
   final List<LedgerTransaction> transactions;
   final AppDataStore store;
   final double verticalOffset;
+  final String filterLabel;
+  final VoidCallback onFilterTap;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        _FilterBar(top: 558 + verticalOffset),
+        _FilterBar(
+          top: 558 + verticalOffset,
+          filterKey: const Key('account-history-filter'),
+          label: filterLabel,
+          onTap: onFilterTap,
+        ),
         ..._transactionWidgets(),
       ],
     );
@@ -793,9 +997,17 @@ class _TransactionLayoutMetrics {
 }
 
 class _FilterBar extends StatelessWidget {
-  const _FilterBar({required this.top});
+  const _FilterBar({
+    required this.top,
+    required this.filterKey,
+    required this.label,
+    required this.onTap,
+  });
 
   final double top;
+  final Key filterKey;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -813,28 +1025,857 @@ class _FilterBar extends StatelessWidget {
           ),
           Positioned(
             right: 0,
-            top: 14,
-            child: Row(
-              children: const [
-                Text(
-                  '3개월 · 전체 · 최신순',
-                  style: TextStyle(
-                    color: Color(0xFF303641),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -.7,
-                  ),
+            top: 3,
+            child: GestureDetector(
+              key: filterKey,
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 11, 0, 11),
+                child: Row(
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Color(0xFF303641),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -.7,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 22,
+                      color: _detailsInk,
+                    ),
+                  ],
                 ),
-                SizedBox(width: 3),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 22,
-                  color: _detailsInk,
-                ),
-              ],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HistoryFilterSheet extends StatefulWidget {
+  const _HistoryFilterSheet({
+    required this.initialFilter,
+    required this.availableYears,
+  });
+
+  final _HistoryFilter initialFilter;
+  final List<int> availableYears;
+
+  @override
+  State<_HistoryFilterSheet> createState() => _HistoryFilterSheetState();
+}
+
+class _HistoryFilterSheetState extends State<_HistoryFilterSheet> {
+  late _HistoryFilter _filter = widget.initialFilter;
+  late final TextEditingController _minimumController;
+  late final TextEditingController _maximumController;
+  String? _validationMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _minimumController = TextEditingController(
+      text: _filter.minimumAmount?.toString() ?? '',
+    );
+    _maximumController = TextEditingController(
+      text: _filter.maximumAmount?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _minimumController.dispose();
+    _maximumController.dispose();
+    super.dispose();
+  }
+
+  void _setRangePreset(_HistoryRangePreset preset) {
+    final today = DateTime.now();
+    final endDate = DateTime(today.year, today.month, today.day);
+    final startDate = switch (preset) {
+      _HistoryRangePreset.week => endDate.subtract(const Duration(days: 7)),
+      _HistoryRangePreset.month => _subtractMonths(endDate, 1),
+      _HistoryRangePreset.threeMonths => _subtractMonths(endDate, 3),
+      _HistoryRangePreset.sixMonths => _subtractMonths(endDate, 6),
+    };
+    setState(() {
+      _filter = _filter.copyWith(
+        periodMode: _HistoryPeriodMode.range,
+        rangePreset: preset,
+        startDate: startDate,
+        endDate: endDate,
+      );
+      _validationMessage = null;
+    });
+  }
+
+  Future<void> _pickRangeDate({required bool start}) async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: start ? _filter.startDate : _filter.endDate,
+      firstDate: DateTime(widget.availableYears.first),
+      lastDate: DateTime(widget.availableYears.last, 12, 31),
+      helpText: start ? '시작일 선택' : '종료일 선택',
+      cancelText: '취소',
+      confirmText: '확인',
+    );
+    if (!mounted || selected == null) return;
+    setState(() {
+      _filter = start
+          ? _filter.copyWith(startDate: selected)
+          : _filter.copyWith(endDate: selected);
+      _validationMessage = null;
+    });
+  }
+
+  Future<void> _pickMonth() async {
+    final selected = await showModalBottomSheet<DateTime>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0x990F1420),
+      builder: (sheetContext) => MediaQuery(
+        data: MediaQuery.of(
+          sheetContext,
+        ).copyWith(textScaler: TextScaler.noScaling),
+        child: _MonthPickerSheet(
+          initialMonth: _filter.month,
+          availableYears: widget.availableYears,
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    setState(() => _filter = _filter.copyWith(month: selected));
+  }
+
+  void _submit() {
+    final minimum = int.tryParse(_minimumController.text);
+    final maximum = int.tryParse(_maximumController.text);
+    if (_filter.periodMode == _HistoryPeriodMode.range &&
+        _filter.startDate.isAfter(_filter.endDate)) {
+      setState(() => _validationMessage = '시작일은 종료일보다 늦을 수 없어요.');
+      return;
+    }
+    if (minimum != null && maximum != null && minimum > maximum) {
+      setState(() => _validationMessage = '최소금액은 최대금액보다 클 수 없어요.');
+      return;
+    }
+    Navigator.of(context).pop(
+      _filter.copyWith(
+        minimumAmount: minimum,
+        maximumAmount: maximum,
+        clearMinimumAmount: minimum == null,
+        clearMaximumAmount: maximum == null,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).height < 1000;
+    final horizontalPadding = compact ? 20.0 : 28.0;
+    final modeHeight = compact ? 50.0 : 72.0;
+    final presetHeight = compact ? 46.0 : 68.0;
+    final fieldHeight = compact ? 48.0 : 64.0;
+    final monthFieldHeight = compact ? 52.0 : 70.0;
+    final typeHeight = compact ? 60.0 : 92.0;
+    final optionHeight = compact ? 48.0 : 68.0;
+    final amountHeight = compact ? 52.0 : 68.0;
+    final sectionGap = compact ? 18.0 : 30.0;
+    final choiceGap = compact ? 8.0 : 14.0;
+    return FractionallySizedBox(
+      heightFactor: compact ? .95 : .92,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  compact ? 14 : 24,
+                  compact ? 12 : 20,
+                  compact ? 4 : 10,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '조회 조건 설정',
+                        style: TextStyle(
+                          color: _detailsInk,
+                          fontSize: compact ? 24 : 27,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -1,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      key: const Key('history-filter-close'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close_rounded, size: compact ? 28 : 32),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    compact ? 4 : 8,
+                    horizontalPadding,
+                    compact ? 12 : 22,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _FilterSectionTitle('조회기간'),
+                      SizedBox(height: choiceGap),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _FilterChoiceButton(
+                              key: const Key('history-period-monthly'),
+                              label: '월별',
+                              selected:
+                                  _filter.periodMode ==
+                                  _HistoryPeriodMode.monthly,
+                              height: modeHeight,
+                              onTap: () => setState(
+                                () => _filter = _filter.copyWith(
+                                  periodMode: _HistoryPeriodMode.monthly,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: compact ? 8 : 12),
+                          Expanded(
+                            child: _FilterChoiceButton(
+                              key: const Key('history-period-range'),
+                              label: '기간별',
+                              selected:
+                                  _filter.periodMode ==
+                                  _HistoryPeriodMode.range,
+                              height: modeHeight,
+                              onTap: () => setState(
+                                () => _filter = _filter.copyWith(
+                                  periodMode: _HistoryPeriodMode.range,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: compact ? 8 : 12),
+                      if (_filter.periodMode == _HistoryPeriodMode.range) ...[
+                        Row(
+                          children: [
+                            for (final entry in const [
+                              (_HistoryRangePreset.week, '1주일'),
+                              (_HistoryRangePreset.month, '1개월'),
+                              (_HistoryRangePreset.threeMonths, '3개월'),
+                              (_HistoryRangePreset.sixMonths, '6개월'),
+                            ]) ...[
+                              Expanded(
+                                child: _FilterChoiceButton(
+                                  key: Key('history-range-${entry.$1.name}'),
+                                  label: entry.$2,
+                                  selected: _filter.rangePreset == entry.$1,
+                                  height: presetHeight,
+                                  onTap: () => _setRangePreset(entry.$1),
+                                ),
+                              ),
+                              if (entry.$1 != _HistoryRangePreset.sixMonths)
+                                SizedBox(width: compact ? 6 : 10),
+                            ],
+                          ],
+                        ),
+                        SizedBox(height: compact ? 10 : 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DateFilterField(
+                                key: const Key('history-start-date'),
+                                date: _filter.startDate,
+                                height: fieldHeight,
+                                compact: compact,
+                                onTap: () => _pickRangeDate(start: true),
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 9),
+                              child: Text(
+                                '-',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: _DateFilterField(
+                                key: const Key('history-end-date'),
+                                date: _filter.endDate,
+                                height: fieldHeight,
+                                compact: compact,
+                                onTap: () => _pickRangeDate(start: false),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else ...[
+                        InkWell(
+                          key: const Key('history-month-field'),
+                          onTap: _pickMonth,
+                          child: Container(
+                            height: monthFieldHeight,
+                            decoration: const BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(color: Color(0xFFD4D8DF)),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${_filter.month.year}년 '
+                                    '${_filter.month.month.toString().padLeft(2, '0')}월',
+                                    style: TextStyle(
+                                      color: _detailsInk,
+                                      fontSize: compact ? 19 : 24,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: -.7,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 31,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: compact ? 18 : 34),
+                      const _FilterSectionTitle('유형'),
+                      SizedBox(height: choiceGap),
+                      Row(
+                        children: [
+                          for (final entry in const [
+                            (_HistoryType.all, '전체'),
+                            (_HistoryType.deposit, '입금'),
+                            (_HistoryType.withdrawal, '출금'),
+                            (_HistoryType.shinhanAtm, '신한\nATM'),
+                          ]) ...[
+                            Expanded(
+                              child: _FilterChoiceButton(
+                                key: Key('history-type-${entry.$1.name}'),
+                                label: entry.$2,
+                                selected: _filter.type == entry.$1,
+                                height: typeHeight,
+                                onTap: () => setState(
+                                  () => _filter = _filter.copyWith(
+                                    type: entry.$1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (entry.$1 != _HistoryType.shinhanAtm)
+                              SizedBox(width: compact ? 6 : 10),
+                          ],
+                        ],
+                      ),
+                      SizedBox(height: sectionGap),
+                      const _FilterSectionTitle('정렬'),
+                      SizedBox(height: choiceGap),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _FilterChoiceButton(
+                              key: const Key('history-sort-newest'),
+                              label: '최신순',
+                              selected: _filter.sort == _HistorySort.newest,
+                              height: optionHeight,
+                              onTap: () => setState(
+                                () => _filter = _filter.copyWith(
+                                  sort: _HistorySort.newest,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: compact ? 8 : 12),
+                          Expanded(
+                            child: _FilterChoiceButton(
+                              key: const Key('history-sort-oldest'),
+                              label: '과거순',
+                              selected: _filter.sort == _HistorySort.oldest,
+                              height: optionHeight,
+                              onTap: () => setState(
+                                () => _filter = _filter.copyWith(
+                                  sort: _HistorySort.oldest,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: sectionGap),
+                      const _FilterSectionTitle('금액범위'),
+                      SizedBox(height: choiceGap),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _AmountFilterField(
+                              key: const Key('history-minimum-amount'),
+                              controller: _minimumController,
+                              hint: '최소금액',
+                              height: amountHeight,
+                              compact: compact,
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 9),
+                            child: Text(
+                              '-',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: _AmountFilterField(
+                              key: const Key('history-maximum-amount'),
+                              controller: _maximumController,
+                              hint: '최대금액',
+                              height: amountHeight,
+                              compact: compact,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_validationMessage != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _validationMessage!,
+                          style: const TextStyle(
+                            color: Color(0xFFE23A3A),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  compact ? 8 : 12,
+                  horizontalPadding,
+                  compact ? 12 : 18,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: compact ? 56 : 70,
+                  child: FilledButton(
+                    key: const Key('history-filter-apply'),
+                    onPressed: _submit,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _detailsBlue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                    ),
+                    child: Text(
+                      '조회',
+                      style: TextStyle(
+                        fontSize: compact ? 20 : 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterSectionTitle extends StatelessWidget {
+  const _FilterSectionTitle(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).height < 1000;
+    return Text(
+      label,
+      style: TextStyle(
+        color: _detailsSecondary,
+        fontSize: compact ? 16 : 19,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.5,
+      ),
+    );
+  }
+}
+
+class _FilterChoiceButton extends StatelessWidget {
+  const _FilterChoiceButton({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.height,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final double height;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).height < 1000;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        height: height,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? _detailsBlue : const Color(0xFFD4D8DF),
+            width: selected ? 1.8 : 1.1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected ? _detailsBlue : _detailsInk,
+              fontSize: compact ? 17 : 20,
+              height: 1.25,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DateFilterField extends StatelessWidget {
+  const _DateFilterField({
+    super.key,
+    required this.date,
+    required this.height,
+    required this.compact,
+    required this.onTap,
+  });
+
+  final DateTime date;
+  final double height;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: height,
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFD4D8DF))),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${date.year}.${date.month.toString().padLeft(2, '0')}.'
+                '${date.day.toString().padLeft(2, '0')}',
+                style: TextStyle(
+                  color: _detailsSecondary,
+                  fontSize: compact ? 15.5 : 18,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.calendar_month_outlined,
+              color: _detailsInk,
+              size: compact ? 24 : 28,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AmountFilterField extends StatelessWidget {
+  const _AmountFilterField({
+    super.key,
+    required this.controller,
+    required this.hint,
+    required this.height,
+    required this.compact,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final double height;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: _detailsInk,
+          fontSize: compact ? 15.5 : 18,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Color(0xFF9DA5B3)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFD4D8DF)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: _detailsBlue, width: 1.8),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MonthPickerSheet extends StatefulWidget {
+  const _MonthPickerSheet({
+    required this.initialMonth,
+    required this.availableYears,
+  });
+
+  final DateTime initialMonth;
+  final List<int> availableYears;
+
+  @override
+  State<_MonthPickerSheet> createState() => _MonthPickerSheetState();
+}
+
+class _MonthPickerSheetState extends State<_MonthPickerSheet> {
+  late int _year = widget.initialMonth.year;
+  late int _month = widget.initialMonth.month;
+  late final List<int> _years;
+  late final FixedExtentScrollController _yearController;
+  late final FixedExtentScrollController _monthController;
+
+  @override
+  void initState() {
+    super.initState();
+    _years = {...widget.availableYears, _year}.toList()..sort();
+    _yearController = FixedExtentScrollController(
+      initialItem: _years.indexOf(_year),
+    );
+    _monthController = FixedExtentScrollController(initialItem: _month - 1);
+  }
+
+  @override
+  void dispose() {
+    _yearController.dispose();
+    _monthController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).height < 1000;
+    final horizontalPadding = compact ? 20.0 : 28.0;
+    final wheelItemExtent = compact ? 52.0 : 58.0;
+    return SizedBox(
+      height: compact ? 440 : 505,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  compact ? 14 : 22,
+                  compact ? 12 : 20,
+                  compact ? 4 : 8,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '조회 월 선택',
+                        style: TextStyle(
+                          color: _detailsInk,
+                          fontSize: compact ? 24 : 27,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      key: const Key('history-month-picker-close'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close_rounded, size: compact ? 28 : 32),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      height: wheelItemExtent,
+                      color: const Color(0xFFF2F5FB),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ListWheelScrollView.useDelegate(
+                            key: const Key('history-year-wheel'),
+                            controller: _yearController,
+                            itemExtent: wheelItemExtent,
+                            physics: const FixedExtentScrollPhysics(),
+                            diameterRatio: 1.7,
+                            onSelectedItemChanged: (index) {
+                              setState(() => _year = _years[index]);
+                            },
+                            childDelegate: ListWheelChildBuilderDelegate(
+                              childCount: _years.length,
+                              builder: (context, index) {
+                                final value = _years[index];
+                                return Center(
+                                  child: Text(
+                                    '$value년',
+                                    key: Key('history-year-option-$value'),
+                                    style: TextStyle(
+                                      color: value == _year
+                                          ? _detailsInk
+                                          : const Color(0xFFBBC1CB),
+                                      fontSize: compact ? 22 : 25,
+                                      fontWeight: value == _year
+                                          ? FontWeight.w500
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: ListWheelScrollView.useDelegate(
+                            key: const Key('history-month-wheel'),
+                            controller: _monthController,
+                            itemExtent: wheelItemExtent,
+                            physics: const FixedExtentScrollPhysics(),
+                            diameterRatio: 1.7,
+                            onSelectedItemChanged: (index) {
+                              setState(() => _month = index + 1);
+                            },
+                            childDelegate: ListWheelChildBuilderDelegate(
+                              childCount: 12,
+                              builder: (context, index) {
+                                final value = index + 1;
+                                return Center(
+                                  child: Text(
+                                    '${value.toString().padLeft(2, '0')}월',
+                                    key: Key('history-month-option-$value'),
+                                    style: TextStyle(
+                                      color: value == _month
+                                          ? _detailsInk
+                                          : const Color(0xFFBBC1CB),
+                                      fontSize: compact ? 22 : 25,
+                                      fontWeight: value == _month
+                                          ? FontWeight.w500
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  compact ? 8 : 14,
+                  horizontalPadding,
+                  compact ? 12 : 18,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: compact ? 56 : 70,
+                  child: FilledButton(
+                    key: const Key('history-month-picker-apply'),
+                    onPressed: () =>
+                        Navigator.of(context).pop(DateTime(_year, _month)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _detailsBlue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                    ),
+                    child: Text(
+                      '조회',
+                      style: TextStyle(
+                        fontSize: compact ? 20 : 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

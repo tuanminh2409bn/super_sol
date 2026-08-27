@@ -791,13 +791,290 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final oldestTransactionRect = tester.getRect(find.text('TX-0'));
+    final oldestTransactionRect = tester.getRect(find.text('TX-11'));
     expect(oldestTransactionRect.top, greaterThanOrEqualTo(0));
     expect(oldestTransactionRect.bottom, lessThan(1164));
     expect(
       find.byKey(const Key('account-transaction-date-2026-8-6')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('history filter selects a month and shows only that month', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    addTearDown(store.dispose);
+    final account = await store.saveAccount(
+      BankAccount(
+        id: 'monthly-filter-account',
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TRINHTRUNGMINH',
+        accountNumber: '110-628-103680',
+        accountType: '저축예금',
+        openingBalance: 100000,
+        createdAt: DateTime(2026, 5, 1),
+      ),
+    );
+    await store.createTransaction(
+      accountId: account.id,
+      title: 'JUNE TRANSACTION',
+      signedAmount: 2000,
+      occurredAt: DateTime(2026, 6, 15, 12),
+      channel: '모바일',
+    );
+    await store.createTransaction(
+      accountId: account.id,
+      title: 'AUGUST TRANSACTION',
+      signedAmount: -1000,
+      occurredAt: DateTime(2026, 8, 15, 12),
+      channel: '체크카드',
+    );
+
+    await tester.pumpWidget(
+      _TestHost(
+        home: AccountDetailsScreen(
+          auth: _SignedInAuthService(),
+          dataStore: store,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('3개월 · 전체 · 최신순'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('account-history-filter')));
+    await tester.pumpAndSettle();
+    expect(find.text('조회 조건 설정'), findsOneWidget);
+    expect(find.byKey(const Key('history-range-threeMonths')), findsOneWidget);
+    expect(find.byKey(const Key('history-type-all')), findsOneWidget);
+    expect(find.byKey(const Key('history-sort-newest')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('history-period-monthly')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-month-field')));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('history-month-wheel')),
+      const Offset(0, 116),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-month-picker-apply')));
+    await tester.pumpAndSettle();
+    expect(find.text('2026년 06월'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('history-filter-apply')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2026년 06월 · 전체 · 최신순'), findsOneWidget);
+    expect(find.text('JUNE TRANSACTION'), findsOneWidget);
+    expect(find.text('AUGUST TRANSACTION'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('history month filter includes every recorded transaction year', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    addTearDown(store.dispose);
+    final account = await store.saveAccount(
+      BankAccount(
+        id: 'all-years-filter-account',
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TRINHTRUNGMINH',
+        accountNumber: '110-628-103680',
+        accountType: '저축예금',
+        openingBalance: 100000,
+        createdAt: DateTime(1988, 6, 1),
+      ),
+    );
+    await store.createTransaction(
+      accountId: account.id,
+      title: 'RECORDED IN 1988',
+      signedAmount: 2000,
+      occurredAt: DateTime(1988, 6, 15, 12),
+      channel: '모바일',
+    );
+    await store.createTransaction(
+      accountId: account.id,
+      title: 'RECORDED IN 2026',
+      signedAmount: -1000,
+      occurredAt: DateTime(2026, 8, 15, 12),
+      channel: '체크카드',
+    );
+
+    await tester.pumpWidget(
+      _TestHost(
+        home: AccountDetailsScreen(
+          auth: _SignedInAuthService(),
+          dataStore: store,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('account-history-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-period-monthly')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-month-field')));
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const Key('history-year-wheel')),
+      const Offset(0, 2204),
+    );
+    await tester.drag(
+      find.byKey(const Key('history-month-wheel')),
+      const Offset(0, 116),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('history-year-option-1988')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('history-month-picker-apply')));
+    await tester.pumpAndSettle();
+    expect(find.text('1988년 06월'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('history-filter-apply')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1988년 06월 · 전체 · 최신순'), findsOneWidget);
+    expect(find.text('RECORDED IN 1988'), findsOneWidget);
+    expect(find.text('RECORDED IN 2026'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('history filter keeps mockup typography at Android font scale', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(432, 882);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.15;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    await tester.pumpWidget(
+      _TestHost(home: AccountDetailsScreen(auth: _SignedInAuthService())),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('account-history-filter')));
+    await tester.pumpAndSettle();
+
+    final titleContext = tester.element(find.text('조회 조건 설정'));
+    expect(MediaQuery.textScalerOf(titleContext).scale(20), 20);
+    expect(find.byKey(const Key('history-sort-newest')), findsOneWidget);
+    expect(find.byKey(const Key('history-minimum-amount')), findsOneWidget);
+    expect(find.byKey(const Key('history-filter-apply')), findsOneWidget);
+    final applyRect = tester.getRect(
+      find.byKey(const Key('history-filter-apply')),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('history-minimum-amount'))).bottom,
+      lessThanOrEqualTo(applyRect.top),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('history-sort-newest'))).bottom,
+      lessThanOrEqualTo(applyRect.top),
+    );
+    expect(applyRect.bottom, lessThanOrEqualTo(882));
+
+    await tester.tap(find.byKey(const Key('history-period-monthly')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-month-field')));
+    await tester.pumpAndSettle();
+
+    final pickerContext = tester.element(find.text('조회 월 선택'));
+    expect(MediaQuery.textScalerOf(pickerContext).scale(20), 20);
+    expect(find.byKey(const Key('history-month-picker-apply')), findsOneWidget);
+    expect(
+      tester
+          .getRect(find.byKey(const Key('history-month-picker-apply')))
+          .bottom,
+      lessThanOrEqualTo(882),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('history filter applies type sort and amount range together', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: false);
+    addTearDown(store.dispose);
+    final account = await store.saveAccount(
+      BankAccount(
+        id: 'combined-filter-account',
+        bankCode: '신한',
+        bankDisplayName: '신한',
+        ownerName: 'TRINHTRUNGMINH',
+        accountNumber: '110-628-103680',
+        accountType: '저축예금',
+        openingBalance: 100000,
+        createdAt: DateTime(2026, 5, 1),
+      ),
+    );
+    await store.createTransaction(
+      accountId: account.id,
+      title: 'SMALL DEPOSIT',
+      signedAmount: 500,
+      occurredAt: DateTime(2026, 6, 1),
+      channel: '모바일',
+    );
+    await store.createTransaction(
+      accountId: account.id,
+      title: 'OLDER DEPOSIT',
+      signedAmount: 1500,
+      occurredAt: DateTime(2026, 6, 2),
+      channel: '모바일',
+    );
+    await store.createTransaction(
+      accountId: account.id,
+      title: 'NEWER DEPOSIT',
+      signedAmount: 2500,
+      occurredAt: DateTime(2026, 6, 3),
+      channel: '모바일',
+    );
+    await store.createTransaction(
+      accountId: account.id,
+      title: 'WITHDRAWAL',
+      signedAmount: -2000,
+      occurredAt: DateTime(2026, 6, 4),
+      channel: '체크카드',
+    );
+
+    await tester.pumpWidget(
+      _TestHost(
+        home: AccountDetailsScreen(
+          auth: _SignedInAuthService(),
+          dataStore: store,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('account-history-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-type-deposit')));
+    await tester.tap(find.byKey(const Key('history-sort-oldest')));
+    await tester.enterText(
+      find.byKey(const Key('history-minimum-amount')),
+      '1000',
+    );
+    await tester.enterText(
+      find.byKey(const Key('history-maximum-amount')),
+      '3000',
+    );
+    await tester.tap(find.byKey(const Key('history-filter-apply')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('3개월 · 입금 · 과거순'), findsOneWidget);
+    expect(find.text('SMALL DEPOSIT'), findsNothing);
+    expect(find.text('WITHDRAWAL'), findsNothing);
+    final older = tester.getTopLeft(find.text('OLDER DEPOSIT')).dy;
+    final newer = tester.getTopLeft(find.text('NEWER DEPOSIT')).dy;
+    expect(older, lessThan(newer));
     expect(tester.takeException(), isNull);
   });
 
