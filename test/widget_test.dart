@@ -927,6 +927,7 @@ void main() {
       find.byKey(const Key('history-year-wheel')),
       const Offset(0, 2204),
     );
+    await tester.pumpAndSettle();
     await tester.drag(
       find.byKey(const Key('history-month-wheel')),
       const Offset(0, 116),
@@ -943,6 +944,61 @@ void main() {
     expect(find.text('1988년 06월 · 전체 · 최신순'), findsOneWidget);
     expect(find.text('RECORDED IN 1988'), findsOneWidget);
     expect(find.text('RECORDED IN 2026'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('history date and month pickers exclude future dates', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    final now = DateTime.now();
+
+    await tester.pumpWidget(
+      _TestHost(home: AccountDetailsScreen(auth: _SignedInAuthService())),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('account-history-filter')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('history-end-date')));
+    await tester.pumpAndSettle();
+    final datePicker = tester.widget<CalendarDatePicker>(
+      find.byType(CalendarDatePicker),
+    );
+    expect(DateUtils.dateOnly(datePicker.lastDate), DateUtils.dateOnly(now));
+    Navigator.of(tester.element(find.byType(CalendarDatePicker))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('history-period-monthly')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('history-month-field')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(Key('history-year-option-${now.year + 1}')),
+      findsNothing,
+    );
+    await tester.drag(
+      find.byKey(const Key('history-year-wheel')),
+      const Offset(0, -1000),
+    );
+    await tester.drag(
+      find.byKey(const Key('history-month-wheel')),
+      const Offset(0, -1000),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(Key('history-year-option-${now.year}')), findsOneWidget);
+    expect(
+      find.byKey(Key('history-month-option-${now.month}')),
+      findsOneWidget,
+    );
+    if (now.month < DateTime.monthsPerYear) {
+      expect(
+        find.byKey(Key('history-month-option-${now.month + 1}')),
+        findsNothing,
+      );
+    }
     expect(tester.takeException(), isNull);
   });
 

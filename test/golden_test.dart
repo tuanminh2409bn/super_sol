@@ -28,6 +28,7 @@ void main() {
   ) async {
     _configureMockupViewport(tester);
     final auth = _GoldenAuthService();
+    final mockupNow = DateTime(2026, 8, 27);
     await auth.setPin(PinPurpose.appAccess, '123456');
 
     await tester.pumpWidget(
@@ -120,7 +121,11 @@ void main() {
 
     await tester.pumpWidget(
       _host(
-        AccountDetailsScreen(key: const ValueKey('account-4.1'), auth: auth),
+        AccountDetailsScreen(
+          key: const ValueKey('account-4.1'),
+          auth: auth,
+          nowProvider: () => mockupNow,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -135,6 +140,7 @@ void main() {
           key: const ValueKey('account-4.2'),
           auth: auth,
           initialScrollOffset: 370,
+          nowProvider: () => mockupNow,
         ),
       ),
     );
@@ -430,7 +436,13 @@ void main() {
     }
 
     await tester.pumpWidget(
-      _host(AccountDetailsScreen(auth: auth, dataStore: store)),
+      _host(
+        AccountDetailsScreen(
+          auth: auth,
+          dataStore: store,
+          nowProvider: () => DateTime(2026, 8, 27),
+        ),
+      ),
     );
     await _precache(tester, const [
       'assets/images/bank_shinhan_transparent.png',

@@ -175,12 +175,14 @@ class AccountDetailsScreen extends StatefulWidget {
     this.initialScrollOffset = 0,
     AppDataStore? dataStore,
     this.accountId,
+    this.nowProvider,
   }) : dataStore = dataStore ?? AppDataStore.shared;
 
   final AuthService auth;
   final AppDataStore dataStore;
   final String? accountId;
   final double initialScrollOffset;
+  final DateTime Function()? nowProvider;
 
   @override
   State<AccountDetailsScreen> createState() => _AccountDetailsScreenState();
@@ -191,12 +193,14 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
   late double _scrollOffset;
   late _HistoryFilter _historyFilter;
 
+  DateTime get _now => widget.nowProvider?.call() ?? DateTime.now();
+
   @override
   void initState() {
     super.initState();
     showDeviceStatusBar(darkIcons: true, backgroundColor: Colors.white);
     _scrollOffset = widget.initialScrollOffset;
-    _historyFilter = _HistoryFilter.initial(DateTime.now());
+    _historyFilter = _HistoryFilter.initial(_now);
     _scrollController = ScrollController(
       initialScrollOffset: widget.initialScrollOffset,
     )..addListener(_handleScroll);
@@ -277,16 +281,17 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
   }
 
   Future<void> _openHistoryFilter() async {
-    final currentYear = DateTime.now().year;
+    final now = _now;
+    final currentYear = now.year;
     final account = _selectedAccount;
     final recordedYears = <int>{
-      _historyFilter.month.year,
+      if (_historyFilter.month.year <= currentYear) _historyFilter.month.year,
       currentYear - 3,
-      currentYear + 3,
       if (account != null)
         ...widget.dataStore
             .transactionsFor(account.id)
-            .map((transaction) => transaction.occurredAt.year),
+            .map((transaction) => transaction.occurredAt.year)
+            .where((year) => year <= currentYear),
     };
     final firstYear = recordedYears.reduce(
       (left, right) => left < right ? left : right,
@@ -310,6 +315,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
         child: _HistoryFilterSheet(
           initialFilter: _historyFilter,
           availableYears: availableYears,
+          latestSelectableDate: DateTime(now.year, now.month, now.day),
         ),
       ),
     );
@@ -1064,10 +1070,12 @@ class _HistoryFilterSheet extends StatefulWidget {
   const _HistoryFilterSheet({
     required this.initialFilter,
     required this.availableYears,
+    required this.latestSelectableDate,
   });
 
   final _HistoryFilter initialFilter;
   final List<int> availableYears;
+  final DateTime latestSelectableDate;
 
   @override
   State<_HistoryFilterSheet> createState() => _HistoryFilterSheetState();
@@ -1098,8 +1106,7 @@ class _HistoryFilterSheetState extends State<_HistoryFilterSheet> {
   }
 
   void _setRangePreset(_HistoryRangePreset preset) {
-    final today = DateTime.now();
-    final endDate = DateTime(today.year, today.month, today.day);
+    final endDate = widget.latestSelectableDate;
     final startDate = switch (preset) {
       _HistoryRangePreset.week => endDate.subtract(const Duration(days: 7)),
       _HistoryRangePreset.month => _subtractMonths(endDate, 1),
@@ -1122,7 +1129,7 @@ class _HistoryFilterSheetState extends State<_HistoryFilterSheet> {
       context: context,
       initialDate: start ? _filter.startDate : _filter.endDate,
       firstDate: DateTime(widget.availableYears.first),
-      lastDate: DateTime(widget.availableYears.last, 12, 31),
+      lastDate: widget.latestSelectableDate,
       helpText: start ? '시작일 선택' : '종료일 선택',
       cancelText: '취소',
       confirmText: '확인',
@@ -1150,6 +1157,10 @@ class _HistoryFilterSheetState extends State<_HistoryFilterSheet> {
         child: _MonthPickerSheet(
           initialMonth: _filter.month,
           availableYears: widget.availableYears,
+          latestSelectableMonth: DateTime(
+            widget.latestSelectableDate.year,
+            widget.latestSelectableDate.month,
+          ),
         ),
       ),
     );
@@ -1686,26 +1697,43 @@ class _MonthPickerSheet extends StatefulWidget {
   const _MonthPickerSheet({
     required this.initialMonth,
     required this.availableYears,
+    required this.latestSelectableMonth,
   });
 
   final DateTime initialMonth;
   final List<int> availableYears;
+  final DateTime latestSelectableMonth;
 
   @override
   State<_MonthPickerSheet> createState() => _MonthPickerSheetState();
 }
 
 class _MonthPickerSheetState extends State<_MonthPickerSheet> {
-  late int _year = widget.initialMonth.year;
-  late int _month = widget.initialMonth.month;
+  late int _year;
+  late int _month;
   late final List<int> _years;
   late final FixedExtentScrollController _yearController;
   late final FixedExtentScrollController _monthController;
 
+  int _lastMonthForYear(int year) {
+    return year == widget.latestSelectableMonth.year
+        ? widget.latestSelectableMonth.month
+        : 12;
+  }
+
   @override
   void initState() {
     super.initState();
-    _years = {...widget.availableYears, _year}.toList()..sort();
+    _years =
+        widget.availableYears
+            .where((year) => year <= widget.latestSelectableMonth.year)
+            .toSet()
+            .toList()
+          ..sort();
+    _year = widget.initialMonth.year.clamp(_years.first, _years.last).toInt();
+    _month = widget.initialMonth.month
+        .clamp(1, _lastMonthForYear(_year))
+        .toInt();
     _yearController = FixedExtentScrollController(
       initialItem: _years.indexOf(_year),
     );
@@ -1780,7 +1808,23 @@ class _MonthPickerSheetState extends State<_MonthPickerSheet> {
                             physics: const FixedExtentScrollPhysics(),
                             diameterRatio: 1.7,
                             onSelectedItemChanged: (index) {
-                              setState(() => _year = _years[index]);
+                              final nextYear = _years[index];
+                              final nextMonth = _month
+                                  .clamp(1, _lastMonthForYear(nextYear))
+                                  .toInt();
+                              setState(() {
+                                _year = nextYear;
+                                _month = nextMonth;
+                              });
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!mounted ||
+                                    !_monthController.hasClients ||
+                                    _monthController.selectedItem ==
+                                        nextMonth - 1) {
+                                  return;
+                                }
+                                _monthController.jumpToItem(nextMonth - 1);
+                              });
                             },
                             childDelegate: ListWheelChildBuilderDelegate(
                               childCount: _years.length,
@@ -1816,7 +1860,7 @@ class _MonthPickerSheetState extends State<_MonthPickerSheet> {
                               setState(() => _month = index + 1);
                             },
                             childDelegate: ListWheelChildBuilderDelegate(
-                              childCount: 12,
+                              childCount: _lastMonthForYear(_year),
                               builder: (context, index) {
                                 final value = index + 1;
                                 return Center(
