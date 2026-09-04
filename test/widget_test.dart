@@ -249,22 +249,115 @@ void main() {
       ),
     );
     final benefitTitle = tester.getRect(find.text('땡겨요'));
-    final benefitSubtitle = tester.getRect(find.text('할인 쿠폰 드려요'));
-    final benefitOffer = tester.getRect(find.text('bhc치킨 최대 9,000원'));
+    final benefitSubtitle = tester.getRect(find.text('최대 10,000원 할인 쿠폰'));
+    final benefitOffer = tester.getRect(find.text('지금 바로 받아가세요!'));
     expect(benefitSubtitle.top - benefitTitle.bottom, greaterThanOrEqualTo(13));
     expect(benefitOffer.top - benefitSubtitle.bottom, greaterThanOrEqualTo(4));
+    final receiveButton = tester.getRect(find.text('바로받기'));
+    expect(receiveButton.top, greaterThan(benefitOffer.bottom));
+    expect(
+      tester.getSize(find.byKey(const Key('home-benefit-receive-button'))),
+      const Size(501, 57),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('home-delivery-benefit-card'))),
+      const Size(555, 316),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('home-spending-card'))),
+      const Size(555, 252),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('home-spending-caption'))),
+      const Size(499, 61),
+    );
 
     // The icon button is the deterministic switch path used by the UI.
     await tester.tap(find.byKey(const Key('home-switch')));
     await tester.pumpAndSettle();
     expect(find.text('추천서비스'), findsOneWidget);
+    expect(
+      tester.getTopLeft(
+        find.image(const AssetImage('assets/images/point_circle.png')),
+      ).dy,
+      211,
+    );
 
     await tester.drag(
       find.byType(SingleChildScrollView),
       const Offset(0, -168),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('home-switch')), findsNothing);
+    expect(find.byKey(const Key('home-switch')), findsOneWidget);
+  });
+
+  testWidgets('September Home follows the refreshed mockup layout', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await tester.pumpWidget(
+      _TestHost(home: HomeScreen(auth: _SignedInAuthService())),
+    );
+
+    expect(find.text('SOL패밀리'), findsNothing);
+    expect(find.text('bhc치킨 최대 9,000원'), findsNothing);
+    expect(find.text('7월 소비 0원'), findsNothing);
+    expect(find.text('9월 소비'), findsOneWidget);
+    expect(find.text('자산관리의 시작은 소비 파악부터'), findsOneWidget);
+    expect(find.text('신한EZ손해보험'), findsOneWidget);
+    expect(find.text('신한은행 계좌 결제시 매월 보험료\n5% 할인'), findsOneWidget);
+    expect(find.text('신한 SOL 암보험'), findsOneWidget);
+    expect(find.text('내 쿠폰함'), findsOneWidget);
+    expect(find.text('보유 쿠폰 한곳에 관리'), findsOneWidget);
+
+    final couponSubtitle = tester.widget<Text>(
+      find.byKey(const Key('home-benefit-subtitle')),
+    );
+    expect(couponSubtitle.style?.fontSize, 17);
+    expect(couponSubtitle.style?.fontWeight, FontWeight.w500);
+    expect(couponSubtitle.style?.color, const Color(0xFF505866));
+    final offer = tester.widget<Text>(find.text('지금 바로 받아가세요!'));
+    expect(offer.style?.fontSize, 25);
+    expect(offer.style?.fontWeight, FontWeight.w700);
+    expect(offer.style?.color, const Color(0xFF2C313B));
+    final spending = tester.widget<Text>(find.text('9월 소비'));
+    expect(spending.style?.fontSize, 27);
+    expect(spending.style?.fontWeight, FontWeight.w700);
+    expect(spending.style?.color, const Color(0xFF151820));
+
+    const assetsAndSizes = {
+      'assets/images/home_delivery_scooter.png': Size(58, 39),
+      'assets/images/home_insurance_ribbon.png': Size(128, 133),
+      'assets/images/service_salary.png': Size(72, 77),
+      'assets/images/service_card.png': Size(72, 77),
+      'assets/images/home_service_coupon.png': Size(72, 77),
+    };
+    for (final entry in assetsAndSizes.entries) {
+      expect(tester.getSize(find.image(AssetImage(entry.key))), entry.value);
+    }
+    expect(
+      tester.getSize(find.byKey(const Key('home-account-card'))),
+      const Size(555, 251),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('home-bottom-navigation'))),
+      const Size(535, 90),
+    );
+    final salary = tester.getTopLeft(find.text('급여클럽+'));
+    final card = tester.getTopLeft(find.text('내 카드 승인내역'));
+    final coupon = tester.getTopLeft(find.text('내 쿠폰함'));
+    expect(card.dy - salary.dy, 88);
+    expect(coupon.dy - card.dy, 89);
+    expect(salary.dx, card.dx);
+    expect(card.dx, coupon.dx);
+    for (final title in ['급여클럽+', '내 카드 승인내역', '내 쿠폰함']) {
+      final text = tester.widget<Text>(find.text(title));
+      expect(text.style?.fontSize, 25);
+      expect(text.style?.fontWeight, FontWeight.w700);
+      expect(text.style?.color, const Color(0xFF343943));
+    }
+    expect(find.byIcon(Icons.push_pin_outlined), findsNWidgets(3));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('long home account name wraps fully before the header icons', (
@@ -481,7 +574,7 @@ void main() {
       _TestHost(
         home: HomeScreen(
           auth: auth,
-          initialScrollOffset: 1260,
+          initialScrollOffset: 1420,
           dataStore: store,
         ),
       ),
@@ -679,6 +772,67 @@ void main() {
   });
 
   testWidgets(
+    'the balance switch hides only transaction running balances and restores them',
+    (tester) async {
+      _configureMockupViewport(tester);
+      await tester.pumpWidget(
+        _TestHost(home: AccountDetailsScreen(auth: _SignedInAuthService())),
+      );
+      await tester.pumpAndSettle();
+
+      const toggleKey = Key('account-balance-visibility-toggle');
+      const trackKey = Key('account-balance-visibility-track');
+      const knobKey = Key('account-balance-visibility-knob');
+      const transactionBalanceKey = Key(
+        'account-transaction-balance-seed-transaction-0',
+      );
+
+      expect(find.byKey(toggleKey), findsOneWidget);
+      expect(find.byKey(transactionBalanceKey), findsOneWidget);
+      expect(find.byKey(const Key('account-balance-text')), findsOneWidget);
+      expect(
+        tester.widget<AnimatedAlign>(find.byKey(knobKey)).alignment,
+        Alignment.centerRight,
+      );
+      expect(
+        (tester.widget<AnimatedContainer>(find.byKey(trackKey)).decoration
+                as BoxDecoration)
+            .color,
+        const Color(0xFF0068F5),
+      );
+
+      await tester.tap(find.byKey(toggleKey));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(transactionBalanceKey), findsNothing);
+      expect(find.byKey(const Key('account-balance-text')), findsOneWidget);
+      expect(
+        find.byKey(const Key('account-available-balance-text')),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<AnimatedAlign>(find.byKey(knobKey)).alignment,
+        Alignment.centerLeft,
+      );
+      expect(
+        (tester.widget<AnimatedContainer>(find.byKey(trackKey)).decoration
+                as BoxDecoration)
+            .color,
+        const Color(0xFF8E98A8),
+      );
+
+      await tester.tap(find.byKey(toggleKey));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(transactionBalanceKey), findsOneWidget);
+      expect(
+        tester.widget<AnimatedAlign>(find.byKey(knobKey)).alignment,
+        Alignment.centerRight,
+      );
+    },
+  );
+
+  testWidgets(
     'a long account type wraps clear of icons and following account details',
     (tester) async {
       _configureMockupViewport(tester);
@@ -839,6 +993,7 @@ void main() {
         home: AccountDetailsScreen(
           auth: _SignedInAuthService(),
           dataStore: store,
+          nowProvider: () => DateTime(2026, 8, 27),
         ),
       ),
     );
@@ -912,6 +1067,7 @@ void main() {
         home: AccountDetailsScreen(
           auth: _SignedInAuthService(),
           dataStore: store,
+          nowProvider: () => DateTime(2026, 8, 27),
         ),
       ),
     );
@@ -1106,6 +1262,7 @@ void main() {
         home: AccountDetailsScreen(
           auth: _SignedInAuthService(),
           dataStore: store,
+          nowProvider: () => DateTime(2026, 8, 27),
         ),
       ),
     );

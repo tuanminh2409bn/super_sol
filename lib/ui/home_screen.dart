@@ -37,23 +37,16 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final ScrollController _homeScroll;
-  late double _scrollOffset;
 
   @override
   void initState() {
     super.initState();
     showDeviceStatusBar(darkIcons: true, backgroundColor: _homeBackground);
-    _scrollOffset = widget.initialScrollOffset;
     _homeScroll = ScrollController(
       initialScrollOffset: widget.initialScrollOffset,
+      keepScrollOffset: false,
     );
     widget.dataStore.addListener(_handleDataChange);
-    _homeScroll.addListener(() {
-      final offset = _homeScroll.offset;
-      if ((offset - _scrollOffset).abs() > 2 && mounted) {
-        setState(() => _scrollOffset = offset);
-      }
-    });
   }
 
   @override
@@ -70,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _scrollToContinuation() async {
     if (_homeScroll.hasClients) {
       await _homeScroll.animateTo(
-        941,
+        1247,
         duration: const Duration(milliseconds: 520),
         curve: Curves.easeOutCubic,
       );
@@ -208,7 +201,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final collapsed = _scrollOffset >= 1000;
     final accountLabel = widget.auth.isSignedIn
         ? widget.auth.displayName
         : 'ĐĂNG NHẬP';
@@ -237,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
               physics: const BouncingScrollPhysics(),
               child: SizedBox(
                 width: mockupWidth,
-                height: 2540 + bottomNavigationLift,
+                height: 2700 + bottomNavigationLift,
                 child: Stack(
                   children: [
                     _AssetHomeContent(
@@ -254,15 +246,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const Positioned(
                       left: 0,
-                      top: 941,
+                      top: 1098,
                       width: mockupWidth,
-                      height: 1510,
+                      height: 1353,
                       child: _ServiceHomeContent(),
                     ),
                     if (widget.auth.isSignedIn)
                       Positioned(
                         right: 27,
-                        top: 2310,
+                        top: 2510,
                         width: 141,
                         height: 38,
                         child: TextButton.icon(
@@ -292,28 +284,18 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          if (!collapsed)
-            const Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: 185,
-              child: ColoredBox(color: _homeBackground),
-            ),
-          if (!collapsed)
-            _Header(
-              accountName: accountLabel,
-              onAccountTap: _showAccount,
-              onSwitchHome: _scrollToContinuation,
-            ),
-          if (collapsed)
-            const Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: 181,
-              child: ColoredBox(color: _homeBackground),
-            ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 185,
+            child: ColoredBox(color: _homeBackground),
+          ),
+          _Header(
+            accountName: accountLabel,
+            onAccountTap: _showAccount,
+            onSwitchHome: _scrollToContinuation,
+          ),
           _BottomNavigation(bottomLift: bottomNavigationLift),
         ],
       ),
@@ -571,10 +553,11 @@ class _AssetHomeContent extends StatelessWidget {
           ),
         ),
         Positioned(
+          key: const Key('home-delivery-benefit-card'),
           left: 17,
           top: 640,
           width: 555,
-          height: 243,
+          height: 316,
           child: _WhiteCard(
             child: Stack(
               children: [
@@ -602,20 +585,20 @@ class _AssetHomeContent extends StatelessWidget {
                 ),
                 const Positioned(
                   left: 25,
-                  top: 91,
+                  top: 94,
                   width: 58,
                   height: 39,
                   child: Image(
-                    image: AssetImage('assets/images/coupon_tight.png'),
+                    image: AssetImage('assets/images/home_delivery_scooter.png'),
                     fit: BoxFit.fill,
                   ),
                 ),
                 const Positioned(
                   left: 85,
-                  top: 77,
+                  top: 84,
                   child: Text(
                     key: Key('home-benefit-subtitle'),
-                    '할인 쿠폰 드려요',
+                    '최대 10,000원 할인 쿠폰',
                     style: TextStyle(
                       fontSize: 17,
                       color: _homeSecondary,
@@ -626,9 +609,9 @@ class _AssetHomeContent extends StatelessWidget {
                 ),
                 const Positioned(
                   left: 85,
-                  top: 107,
+                  top: 114,
                   child: Text(
-                    'bhc치킨 최대 9,000원',
+                    '지금 바로 받아가세요!',
                     style: TextStyle(
                       fontSize: 25,
                       color: Color(0xFF2C313B),
@@ -638,13 +621,14 @@ class _AssetHomeContent extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  right: 20,
-                  top: 94,
-                  width: 99,
-                  height: 43,
+                  left: 27,
+                  right: 27,
+                  top: 160,
+                  height: 57,
                   child: DecoratedBox(
+                    key: const Key('home-benefit-receive-button'),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0F3FF),
+                      color: const Color(0xFFF4F6FB),
                       borderRadius: BorderRadius.circular(13),
                     ),
                     child: const Center(
@@ -652,7 +636,7 @@ class _AssetHomeContent extends StatelessWidget {
                         '바로받기',
                         style: TextStyle(
                           fontSize: 17,
-                          color: _blue,
+                          color: Color(0xFF505866),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -683,10 +667,11 @@ class _AssetHomeContent extends StatelessWidget {
           ),
         ),
         Positioned(
+          key: const Key('home-spending-card'),
           left: 17,
-          top: 899,
+          top: 968,
           width: 555,
-          height: 179,
+          height: 252,
           child: _WhiteCard(
             child: Stack(
               children: [
@@ -696,7 +681,7 @@ class _AssetHomeContent extends StatelessWidget {
                   child: Row(
                     children: [
                       Text(
-                        '7월 소비 0원',
+                        '9월 소비',
                         style: TextStyle(
                           fontSize: 27,
                           fontWeight: FontWeight.w700,
@@ -758,6 +743,31 @@ class _AssetHomeContent extends StatelessWidget {
                     ),
                   ),
                 ),
+                Positioned(
+                  left: 28,
+                  right: 28,
+                  top: 158,
+                  height: 61,
+                  child: DecoratedBox(
+                    key: const Key('home-spending-caption'),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F8FC),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '자산관리의 시작은 소비 파악부터',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 17,
+                          color: _homeSecondary,
+                          fontWeight: FontWeight.w500,
+                          fontVariations: [FontVariation('wght', 500)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -776,14 +786,26 @@ class _ServiceHomeContent extends StatelessWidget {
       children: [
         const Positioned(
           left: 39,
+          top: 159,
+          child: Text(
+            '신한EZ손해보험',
+            style: TextStyle(
+              color: _homeSecondary,
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        const Positioned(
+          left: 39,
           top: 196,
           child: Text(
-            'SOL LINK 계좌개설 이벤트\n(신한은행 X 신한투자증권)',
+            '신한은행 계좌 결제시 매월 보험료\n5% 할인',
             style: TextStyle(
               color: Color(0xFF343944),
               fontSize: 24,
               height: 1.55,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               letterSpacing: -1,
             ),
           ),
@@ -794,7 +816,7 @@ class _ServiceHomeContent extends StatelessWidget {
           child: Row(
             children: [
               Text(
-                '이벤트 확인하기',
+                '신한 SOL 암보험',
                 style: TextStyle(
                   color: _blue,
                   fontSize: 17,
@@ -812,14 +834,14 @@ class _ServiceHomeContent extends StatelessWidget {
           width: 128,
           height: 133,
           child: Image(
-            image: AssetImage('assets/images/tesla.png'),
+            image: AssetImage('assets/images/home_insurance_ribbon.png'),
             fit: BoxFit.fill,
             filterQuality: FilterQuality.high,
           ),
         ),
         Positioned(
           left: 22,
-          top: 349,
+          top: 330,
           width: 545,
           height: 125,
           child: DecoratedBox(
@@ -899,7 +921,7 @@ class _ServiceHomeContent extends StatelessWidget {
         ),
         Positioned(
           left: 17,
-          top: 487,
+          top: 467,
           width: 555,
           height: 357,
           child: _WhiteCard(
@@ -929,23 +951,23 @@ class _ServiceHomeContent extends StatelessWidget {
                 ),
                 const _ServiceRow(
                   top: 83,
-                  image: 'assets/images/service_family.png',
-                  title: 'SOL패밀리',
-                  subtitle: 'NEW · 가족과 함께하는 금융생활',
-                  subtitleLeadRed: true,
-                ),
-                const _ServiceRow(
-                  top: 171,
                   image: 'assets/images/service_salary.png',
                   title: '급여클럽+',
                   subtitle: '급여이체 우대 혜택',
                   pinned: true,
                 ),
                 const _ServiceRow(
-                  top: 260,
+                  top: 171,
                   image: 'assets/images/service_card.png',
                   title: '내 카드 승인내역',
                   subtitle: '모든 카드 실시간 승인내역',
+                  pinned: true,
+                ),
+                const _ServiceRow(
+                  top: 260,
+                  image: 'assets/images/home_service_coupon.png',
+                  title: '내 쿠폰함',
+                  subtitle: '보유 쿠폰 한곳에 관리',
                   pinned: true,
                 ),
               ],
@@ -954,9 +976,9 @@ class _ServiceHomeContent extends StatelessWidget {
         ),
         Positioned(
           left: 17,
-          top: 856,
+          top: 838,
           width: 555,
-          height: 345,
+          height: 329,
           child: _WhiteCard(
             child: Stack(
               children: [
@@ -998,7 +1020,7 @@ class _ServiceHomeContent extends StatelessWidget {
         const Positioned(
           left: 68,
           right: 68,
-          top: 1238,
+          top: 1215,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1165,7 +1187,6 @@ class _ServiceRow extends StatelessWidget {
     required this.image,
     required this.title,
     required this.subtitle,
-    this.subtitleLeadRed = false,
     this.pinned = false,
   });
 
@@ -1173,7 +1194,6 @@ class _ServiceRow extends StatelessWidget {
   final String image;
   final String title;
   final String subtitle;
-  final bool subtitleLeadRed;
   final bool pinned;
 
   @override
@@ -1208,43 +1228,27 @@ class _ServiceRow extends StatelessWidget {
           Positioned(
             left: 83,
             top: 42,
-            child: subtitleLeadRed
-                ? const Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'NEW',
-                          style: TextStyle(color: Color(0xFFFF4455)),
-                        ),
-                        TextSpan(
-                          text: ' · 가족과 함께하는 금융생활',
-                          style: TextStyle(
-                            color: _muted,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    style: TextStyle(fontSize: 17, letterSpacing: -.6),
-                  )
-                : Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: _muted,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: -.6,
-                    ),
-                  ),
+            child: Text(
+              subtitle,
+              style: const TextStyle(
+                color: _muted,
+                fontSize: 17,
+                fontWeight: FontWeight.w500,
+                letterSpacing: -.6,
+              ),
+            ),
           ),
           if (pinned)
-            const Positioned(
+            Positioned(
               right: 0,
               top: 23,
-              child: Icon(
-                Icons.push_pin_outlined,
-                size: 28,
-                color: Color(0xFF8A94A4),
+              child: Transform.rotate(
+                angle: math.pi / 4,
+                child: const Icon(
+                  Icons.push_pin_outlined,
+                  size: 28,
+                  color: Color(0xFF8A94A4),
+                ),
               ),
             ),
         ],
@@ -1362,15 +1366,15 @@ class _BottomNavigation extends StatelessWidget {
               _BottomNavigationItem(label: '금융', icon: _WonIcon()),
               _BottomNavigationItem(
                 label: '상품',
-                icon: Icon(Icons.shopping_bag_rounded),
+                icon: _HomeNavigationIcon(_HomeNavigationGlyph.product),
               ),
               _BottomNavigationItem(
                 label: '혜택',
-                icon: Icon(Icons.card_giftcard_rounded),
+                icon: _HomeNavigationIcon(_HomeNavigationGlyph.benefits),
               ),
               _BottomNavigationItem(
                 label: '주식',
-                icon: Icon(Icons.insert_chart_rounded),
+                icon: _HomeNavigationIcon(_HomeNavigationGlyph.stocks),
               ),
             ],
           ),
@@ -1422,6 +1426,92 @@ class _BottomNavigationItem extends StatelessWidget {
       ),
     );
   }
+}
+
+enum _HomeNavigationGlyph { product, benefits, stocks }
+
+class _HomeNavigationIcon extends StatelessWidget {
+  const _HomeNavigationIcon(this.glyph);
+
+  final _HomeNavigationGlyph glyph;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = IconTheme.of(context);
+    return CustomPaint(
+      size: Size.square(theme.size ?? 31),
+      painter: _HomeNavigationPainter(glyph, theme.color ?? _homeSecondary),
+    );
+  }
+}
+
+class _HomeNavigationPainter extends CustomPainter {
+  const _HomeNavigationPainter(this.glyph, this.color);
+
+  final _HomeNavigationGlyph glyph;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / 31, size.height / 31);
+    final paint = Paint()..color = color;
+    switch (glyph) {
+      case _HomeNavigationGlyph.product:
+        final bag = Path()
+          ..moveTo(5, 3)
+          ..lineTo(26, 3)
+          ..lineTo(29, 29)
+          ..lineTo(2, 29)
+          ..close();
+        final handle = Path()
+          ..moveTo(8, 7)
+          ..lineTo(11, 7)
+          ..cubicTo(11, 15, 20, 15, 20, 7)
+          ..lineTo(23, 7)
+          ..cubicTo(23, 19, 8, 19, 8, 7)
+          ..close();
+        canvas.drawPath(
+          Path.combine(PathOperation.difference, bag, handle),
+          paint,
+        );
+      case _HomeNavigationGlyph.benefits:
+        canvas.drawRect(const Rect.fromLTWH(3, 12, 11, 17), paint);
+        canvas.drawRect(const Rect.fromLTWH(17, 12, 11, 17), paint);
+        canvas.drawRect(const Rect.fromLTWH(2, 9, 27, 3), paint);
+        canvas.drawPath(
+          Path()
+            ..moveTo(15.5, 8)
+            ..lineTo(6, 4)
+            ..lineTo(10, 0)
+            ..lineTo(15.5, 5)
+            ..lineTo(21, 0)
+            ..lineTo(25, 4)
+            ..close(),
+          paint,
+        );
+      case _HomeNavigationGlyph.stocks:
+        canvas.drawRect(const Rect.fromLTWH(4, 23, 5, 6), paint);
+        canvas.drawRect(const Rect.fromLTWH(13, 18, 5, 11), paint);
+        canvas.drawRect(const Rect.fromLTWH(22, 12, 5, 17), paint);
+        paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.5;
+        canvas.drawPath(
+          Path()
+            ..moveTo(3, 20)
+            ..lineTo(11, 12)
+            ..lineTo(18, 12)
+            ..lineTo(28, 2),
+          paint,
+        );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _HomeNavigationPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.glyph != glyph;
 }
 
 class _WonIcon extends StatelessWidget {

@@ -192,6 +192,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
   late final ScrollController _scrollController;
   late double _scrollOffset;
   late _HistoryFilter _historyFilter;
+  bool _showTransactionBalances = true;
 
   DateTime get _now => widget.nowProvider?.call() ?? DateTime.now();
 
@@ -230,6 +231,12 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
 
   void _handleDataChange() {
     if (mounted) setState(() {});
+  }
+
+  void _toggleTransactionBalances() {
+    setState(() {
+      _showTransactionBalances = !_showTransactionBalances;
+    });
   }
 
   void _goHome() {
@@ -389,6 +396,8 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
                       verticalOffset: accountSummaryOffset,
                       filterLabel: _historyFilter.summaryLabel,
                       onFilterTap: _openHistoryFilter,
+                      showTransactionBalances: _showTransactionBalances,
+                      onBalanceVisibilityTap: _toggleTransactionBalances,
                     ),
                   ],
                 ),
@@ -869,6 +878,8 @@ class _TransactionList extends StatelessWidget {
     required this.verticalOffset,
     required this.filterLabel,
     required this.onFilterTap,
+    required this.showTransactionBalances,
+    required this.onBalanceVisibilityTap,
   });
 
   final String accountName;
@@ -878,6 +889,8 @@ class _TransactionList extends StatelessWidget {
   final double verticalOffset;
   final String filterLabel;
   final VoidCallback onFilterTap;
+  final bool showTransactionBalances;
+  final VoidCallback onBalanceVisibilityTap;
 
   @override
   Widget build(BuildContext context) {
@@ -888,6 +901,14 @@ class _TransactionList extends StatelessWidget {
           filterKey: const Key('account-history-filter'),
           label: filterLabel,
           onTap: onFilterTap,
+        ),
+        Positioned(
+          right: 28,
+          top: 615 + verticalOffset,
+          child: _BalanceVisibilityToggle(
+            isVisible: showTransactionBalances,
+            onTap: onBalanceVisibilityTap,
+          ),
         ),
         ..._transactionWidgets(),
       ],
@@ -961,12 +982,91 @@ class _TransactionList extends StatelessWidget {
               '${_formatDetailsMoney(signed.abs())}원',
           balance:
               '${_formatDetailsMoney(store.runningBalanceFor(transaction))}원',
+          showBalance: showTransactionBalances,
           positive: signed >= 0,
         ),
       );
       cursor += _TransactionLayoutMetrics.rowExtent;
     }
     return widgets;
+  }
+}
+
+class _BalanceVisibilityToggle extends StatelessWidget {
+  const _BalanceVisibilityToggle({
+    required this.isVisible,
+    required this.onTap,
+  });
+
+  final bool isVisible;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '거래 후 잔액 표시',
+      button: true,
+      toggled: isVisible,
+      child: GestureDetector(
+        key: const Key('account-balance-visibility-toggle'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          key: const Key('account-balance-visibility-track'),
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          width: 72,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isVisible ? _detailsBlue : const Color(0xFF8E98A8),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Stack(
+            children: [
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOut,
+                alignment: isVisible
+                    ? Alignment.centerLeft
+                    : Alignment.centerRight,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: isVisible ? 11 : 0,
+                    right: isVisible ? 0 : 10,
+                  ),
+                  child: const Text(
+                    '잔액',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -.5,
+                    ),
+                  ),
+                ),
+              ),
+              AnimatedAlign(
+                key: const Key('account-balance-visibility-knob'),
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOut,
+                alignment: isVisible
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  margin: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1933,6 +2033,7 @@ class _TransactionRow extends StatelessWidget {
     required this.time,
     required this.amount,
     required this.balance,
+    required this.showBalance,
     this.positive = false,
   });
 
@@ -1942,6 +2043,7 @@ class _TransactionRow extends StatelessWidget {
   final String time;
   final String amount;
   final String balance;
+  final bool showBalance;
   final bool positive;
 
   @override
@@ -1998,21 +2100,22 @@ class _TransactionRow extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            right: 0,
-            top: 49,
-            child: Text(
-              key: Key('account-transaction-balance-$transactionId'),
-              balance,
-              style: const TextStyle(
-                color: _detailsSecondary,
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                fontVariations: [FontVariation('wght', 500)],
-                letterSpacing: -.5,
+          if (showBalance)
+            Positioned(
+              right: 0,
+              top: 49,
+              child: Text(
+                key: Key('account-transaction-balance-$transactionId'),
+                balance,
+                style: const TextStyle(
+                  color: _detailsSecondary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  fontVariations: [FontVariation('wght', 500)],
+                  letterSpacing: -.5,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

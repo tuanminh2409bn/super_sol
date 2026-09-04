@@ -67,15 +67,15 @@ void main() {
       'assets/images/profile_badge.png',
       'assets/images/shinhan_logo.png',
       'assets/images/home_sol_global_card.png',
-      'assets/images/coupon_tight.png',
+      'assets/images/home_delivery_scooter.png',
       'assets/images/calendar.png',
       'assets/images/header_chat.png',
       'assets/images/header_wallet.png',
       'assets/images/header_bell.png',
       'assets/images/header_search.png',
-      'assets/images/tesla.png',
+      'assets/images/home_insurance_ribbon.png',
       'assets/images/point_circle.png',
-      'assets/images/service_family.png',
+      'assets/images/home_service_coupon.png',
       'assets/images/service_salary.png',
       'assets/images/service_card.png',
       'assets/images/group_card.png',
@@ -92,9 +92,24 @@ void main() {
     await tester.pumpWidget(
       _host(
         HomeScreen(
+          key: const ValueKey('home-september-benefits'),
+          auth: auth,
+          initialScrollOffset: 455,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/3_4_home_september_benefits.png'),
+    );
+
+    await tester.pumpWidget(
+      _host(
+        HomeScreen(
           key: const ValueKey('home-3.2'),
           auth: auth,
-          initialScrollOffset: 941,
+          initialScrollOffset: 1247,
         ),
       ),
     );
@@ -109,7 +124,7 @@ void main() {
         HomeScreen(
           key: const ValueKey('home-3.3'),
           auth: auth,
-          initialScrollOffset: 1108,
+          initialScrollOffset: 1260,
         ),
       ),
     );
@@ -132,6 +147,14 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/4_1_account.png'),
+    );
+    await tester.tap(
+      find.byKey(const Key('account-balance-visibility-toggle')),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/4_1_account_balance_hidden.png'),
     );
 
     await tester.pumpWidget(
@@ -523,13 +546,13 @@ void main() {
       'assets/images/profile_badge.png',
       'assets/images/shinhan_logo.png',
       'assets/images/home_sol_global_card.png',
-      'assets/images/coupon_tight.png',
+      'assets/images/home_delivery_scooter.png',
       'assets/images/calendar.png',
       'assets/images/header_chat.png',
       'assets/images/header_wallet.png',
       'assets/images/header_bell.png',
       'assets/images/header_search.png',
-      'assets/images/tesla.png',
+      'assets/images/home_insurance_ribbon.png',
       'assets/images/point_circle.png',
       'assets/images/bottom_nav_clean.png',
     ]);
