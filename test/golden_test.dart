@@ -29,6 +29,8 @@ void main() {
     _configureMockupViewport(tester);
     final auth = _GoldenAuthService();
     final mockupNow = DateTime(2026, 8, 27);
+    final homeStore = AppDataStore.inMemory(withMockData: true);
+    await homeStore.updateHomeSpendingMonth(9);
     await auth.setPin(PinPurpose.appAccess, '123456');
 
     await tester.pumpWidget(
@@ -61,7 +63,13 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _host(HomeScreen(key: const ValueKey('home-3.1'), auth: auth)),
+      _host(
+        HomeScreen(
+          key: const ValueKey('home-3.1'),
+          auth: auth,
+          dataStore: homeStore,
+        ),
+      ),
     );
     await _precache(tester, const [
       'assets/images/profile_badge.png',
@@ -94,6 +102,7 @@ void main() {
         HomeScreen(
           key: const ValueKey('home-september-benefits'),
           auth: auth,
+          dataStore: homeStore,
           initialScrollOffset: 455,
         ),
       ),
@@ -109,6 +118,7 @@ void main() {
         HomeScreen(
           key: const ValueKey('home-3.2'),
           auth: auth,
+          dataStore: homeStore,
           initialScrollOffset: 1247,
         ),
       ),
@@ -124,6 +134,7 @@ void main() {
         HomeScreen(
           key: const ValueKey('home-3.3'),
           auth: auth,
+          dataStore: homeStore,
           initialScrollOffset: 1260,
         ),
       ),
@@ -541,7 +552,9 @@ void main() {
   ) async {
     _configureMockupViewport(tester);
     final auth = _GoldenAuthService();
-    await tester.pumpWidget(_host(HomeScreen(auth: auth)));
+    final store = AppDataStore.inMemory(withMockData: true);
+    await store.updateHomeSpendingMonth(9);
+    await tester.pumpWidget(_host(HomeScreen(auth: auth, dataStore: store)));
     await _precache(tester, const [
       'assets/images/profile_badge.png',
       'assets/images/shinhan_logo.png',

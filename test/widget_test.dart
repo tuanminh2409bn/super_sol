@@ -277,9 +277,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('추천서비스'), findsOneWidget);
     expect(
-      tester.getTopLeft(
-        find.image(const AssetImage('assets/images/point_circle.png')),
-      ).dy,
+      tester
+          .getTopLeft(
+            find.image(const AssetImage('assets/images/point_circle.png')),
+          )
+          .dy,
       211,
     );
 
@@ -295,8 +297,12 @@ void main() {
     tester,
   ) async {
     _configureMockupViewport(tester);
+    final store = AppDataStore.inMemory(withMockData: true);
+    await store.updateHomeSpendingMonth(9);
     await tester.pumpWidget(
-      _TestHost(home: HomeScreen(auth: _SignedInAuthService())),
+      _TestHost(
+        home: HomeScreen(auth: _SignedInAuthService(), dataStore: store),
+      ),
     );
 
     expect(find.text('SOL패밀리'), findsNothing);
@@ -556,6 +562,65 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('9월 이용 금액 123,456원'), findsOneWidget);
   });
+
+  testWidgets(
+    'spending month defaults to the current month and saves without editing an amount',
+    (tester) async {
+      _configureMockupViewport(tester);
+      final store = AppDataStore.inMemory(withMockData: false);
+      final currentMonth = DateTime.now().month;
+      final selectedMonth = currentMonth == 6 ? 7 : 6;
+
+      await tester.pumpWidget(
+        _TestHost(
+          home: HomeScreen(auth: _SignedInAuthService(), dataStore: store),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('$currentMonth월 소비'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('home-spending-month-edit')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chỉnh tháng hiển thị'), findsOneWidget);
+      expect(
+        find.byKey(const Key('home-spending-month-field')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('home-card-amount-field')), findsNothing);
+      expect(find.text('Số tiền sử dụng'), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const Key('home-spending-month-field')),
+        '13',
+      );
+      await tester.tap(find.byKey(const Key('home-spending-month-save')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Tháng phải nằm trong khoảng từ 1 đến 12.'),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('home-spending-month-field')),
+        '$selectedMonth',
+      );
+      await tester.tap(find.byKey(const Key('home-spending-month-save')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('$selectedMonth월 소비'), findsOneWidget);
+      expect(store.homeSpendingMonth, selectedMonth);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(
+        _TestHost(
+          home: HomeScreen(auth: _SignedInAuthService(), dataStore: store),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('$selectedMonth월 소비'), findsOneWidget);
+    },
+  );
 
   testWidgets('the logout button at the end of Home signs out', (tester) async {
     _configureMockupViewport(tester);

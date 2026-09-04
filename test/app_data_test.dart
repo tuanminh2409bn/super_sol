@@ -265,20 +265,26 @@ void main() {
     },
   );
 
-  test('home card month and amount persist for the signed-in user', () async {
-    SharedPreferences.setMockInitialValues({});
-    final first = AppDataStore();
-    await first.initialize('home-card-user');
+  test(
+    'home card values and spending month persist for the signed-in user',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final first = AppDataStore();
+      await first.initialize('home-card-user');
 
-    expect(first.homeCardMonth, 8);
-    expect(first.homeCardAmount, 6500);
-    await first.updateHomeCardUsage(month: 9, amount: 123456);
+      expect(first.homeCardMonth, 8);
+      expect(first.homeCardAmount, 6500);
+      expect(first.homeSpendingMonth, DateTime.now().month);
+      await first.updateHomeCardUsage(month: 9, amount: 123456);
+      await first.updateHomeSpendingMonth(6);
 
-    final reloaded = AppDataStore();
-    await reloaded.initialize('home-card-user');
-    expect(reloaded.homeCardMonth, 9);
-    expect(reloaded.homeCardAmount, 123456);
-  });
+      final reloaded = AppDataStore();
+      await reloaded.initialize('home-card-user');
+      expect(reloaded.homeCardMonth, 9);
+      expect(reloaded.homeCardAmount, 123456);
+      expect(reloaded.homeSpendingMonth, 6);
+    },
+  );
 
   test('home card rejects invalid month and negative amount', () async {
     final store = AppDataStore.inMemory(withMockData: false);
@@ -291,8 +297,10 @@ void main() {
       store.updateHomeCardUsage(month: 8, amount: -1),
       throwsArgumentError,
     );
+    await expectLater(store.updateHomeSpendingMonth(13), throwsArgumentError);
     expect(store.homeCardMonth, 8);
     expect(store.homeCardAmount, 6500);
+    expect(store.homeSpendingMonth, DateTime.now().month);
   });
 
   test('corrupted local data recovers to an empty valid state', () async {

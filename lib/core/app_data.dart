@@ -230,6 +230,7 @@ class AppDataStore extends ChangeNotifier {
   final List<SavedRecipient> _recipients = [];
   int _homeCardMonth = 8;
   int _homeCardAmount = 6500;
+  int? _homeSpendingMonthOverride;
 
   bool get initialized => _initialized;
   List<BankAccount> get accounts =>
@@ -237,6 +238,8 @@ class AppDataStore extends ChangeNotifier {
   List<SavedRecipient> get recipients => List.unmodifiable(_recipients);
   int get homeCardMonth => _homeCardMonth;
   int get homeCardAmount => _homeCardAmount;
+  int get homeSpendingMonth =>
+      _homeSpendingMonthOverride ?? DateTime.now().month;
 
   Future<void> initialize(String userScope) async {
     if (_initialized && _storageKey == _keyFor(userScope)) return;
@@ -253,6 +256,7 @@ class AppDataStore extends ChangeNotifier {
     _accounts.clear();
     _transactions.clear();
     _recipients.clear();
+    _homeSpendingMonthOverride = null;
     if (raw == null && legacyRaw == null) {
       _localIsFresh = true;
       await _persist();
@@ -653,6 +657,15 @@ class AppDataStore extends ChangeNotifier {
     await _commit();
   }
 
+  Future<void> updateHomeSpendingMonth(int month) async {
+    _requireInitialized();
+    if (month < 1 || month > 12) {
+      throw ArgumentError('Tháng phải nằm trong khoảng từ 1 đến 12.');
+    }
+    _homeSpendingMonthOverride = month;
+    await _commit();
+  }
+
   Future<void> _normalizeTransactionOrder() async {
     for (final account in _accounts) {
       final ordered = transactionsFor(account.id);
@@ -736,6 +749,13 @@ class AppDataStore extends ChangeNotifier {
     _updatedAtMicros = (json['updatedAtMicros'] as num?)?.toInt() ?? 0;
     _homeCardMonth = (json['homeCardMonth'] as num?)?.toInt() ?? 8;
     _homeCardAmount = (json['homeCardAmount'] as num?)?.toInt() ?? 6500;
+    final decodedSpendingMonth = (json['homeSpendingMonth'] as num?)?.toInt();
+    _homeSpendingMonthOverride =
+        decodedSpendingMonth != null &&
+            decodedSpendingMonth >= 1 &&
+            decodedSpendingMonth <= 12
+        ? decodedSpendingMonth
+        : null;
   }
 
   Map<String, Object?> _snapshot() => {
@@ -747,6 +767,7 @@ class AppDataStore extends ChangeNotifier {
     'recipients': _recipients.map((item) => item.toJson()).toList(),
     'homeCardMonth': _homeCardMonth,
     'homeCardAmount': _homeCardAmount,
+    'homeSpendingMonth': _homeSpendingMonthOverride,
   };
 
   void _addMockData() {

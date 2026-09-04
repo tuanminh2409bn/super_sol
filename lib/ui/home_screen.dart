@@ -189,6 +189,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _editHomeSpendingMonth() async {
+    final month = await showDialog<int>(
+      context: context,
+      barrierColor: const Color(0x73000000),
+      builder: (_) => _HomeSpendingMonthDialog(
+        initialMonth: widget.dataStore.homeSpendingMonth,
+      ),
+    );
+    if (month == null) return;
+    await widget.dataStore.updateHomeSpendingMonth(month);
+  }
+
   Future<void> _logout() async {
     await widget.auth.signOut();
     await initializeUserData(widget.auth, store: widget.dataStore);
@@ -243,6 +255,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       cardMonth: widget.dataStore.homeCardMonth,
                       cardAmount: widget.dataStore.homeCardAmount,
                       onEditCardUsage: _editHomeCardUsage,
+                      spendingMonth: widget.dataStore.homeSpendingMonth,
+                      onEditSpendingMonth: _editHomeSpendingMonth,
                     ),
                     const Positioned(
                       left: 0,
@@ -313,6 +327,8 @@ class _AssetHomeContent extends StatelessWidget {
     required this.cardMonth,
     required this.cardAmount,
     required this.onEditCardUsage,
+    required this.spendingMonth,
+    required this.onEditSpendingMonth,
   });
 
   final String accountName;
@@ -323,6 +339,8 @@ class _AssetHomeContent extends StatelessWidget {
   final int cardMonth;
   final int cardAmount;
   final VoidCallback onEditCardUsage;
+  final int spendingMonth;
+  final VoidCallback onEditSpendingMonth;
 
   @override
   Widget build(BuildContext context) {
@@ -589,7 +607,9 @@ class _AssetHomeContent extends StatelessWidget {
                   width: 58,
                   height: 39,
                   child: Image(
-                    image: AssetImage('assets/images/home_delivery_scooter.png'),
+                    image: AssetImage(
+                      'assets/images/home_delivery_scooter.png',
+                    ),
                     fit: BoxFit.fill,
                   ),
                 ),
@@ -675,27 +695,33 @@ class _AssetHomeContent extends StatelessWidget {
           child: _WhiteCard(
             child: Stack(
               children: [
-                const Positioned(
+                Positioned(
                   left: 28,
                   top: 22,
-                  child: Row(
-                    children: [
-                      Text(
-                        '9월 소비',
-                        style: TextStyle(
-                          fontSize: 27,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                          letterSpacing: -1.2,
+                  child: GestureDetector(
+                    key: const Key('home-spending-month-edit'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onEditSpendingMonth,
+                    child: Row(
+                      children: [
+                        Text(
+                          '$spendingMonth월 소비',
+                          key: const Key('home-spending-title'),
+                          style: const TextStyle(
+                            fontSize: 27,
+                            fontWeight: FontWeight.w700,
+                            color: _ink,
+                            letterSpacing: -1.2,
+                          ),
                         ),
-                      ),
-                      SizedBox(width: 10),
-                      Icon(
-                        Icons.refresh_rounded,
-                        size: 26,
-                        color: Color(0xFF8A909C),
-                      ),
-                    ],
+                        const SizedBox(width: 10),
+                        const Icon(
+                          Icons.refresh_rounded,
+                          size: 26,
+                          color: Color(0xFF8A909C),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const Positioned(
@@ -1551,6 +1577,95 @@ const _footerText = TextStyle(
   fontSize: 18,
   fontWeight: FontWeight.w600,
 );
+
+class _HomeSpendingMonthDialog extends StatefulWidget {
+  const _HomeSpendingMonthDialog({required this.initialMonth});
+
+  final int initialMonth;
+
+  @override
+  State<_HomeSpendingMonthDialog> createState() =>
+      _HomeSpendingMonthDialogState();
+}
+
+class _HomeSpendingMonthDialogState extends State<_HomeSpendingMonthDialog> {
+  late final TextEditingController _monthController;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _monthController = TextEditingController(
+      text: widget.initialMonth.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _monthController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final month = int.tryParse(
+      _monthController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+    );
+    if (month == null || month < 1 || month > 12) {
+      setState(() => _error = 'Tháng phải nằm trong khoảng từ 1 đến 12.');
+      return;
+    }
+    Navigator.of(context).pop(month);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      title: const Text(
+        'Chỉnh tháng hiển thị',
+        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const Key('home-spending-month-field'),
+            controller: _monthController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Tháng hiển thị',
+              suffixText: '월',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              key: const Key('home-spending-month-error'),
+              style: const TextStyle(color: Color(0xFFD92D45), fontSize: 13),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          key: const Key('home-spending-month-save'),
+          onPressed: _save,
+          style: FilledButton.styleFrom(backgroundColor: _blue),
+          child: const Text('Lưu'),
+        ),
+      ],
+    );
+  }
+}
 
 class _HomeCardUsageDraft {
   const _HomeCardUsageDraft({required this.month, required this.amount});
