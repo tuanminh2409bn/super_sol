@@ -2795,7 +2795,7 @@ class _TransferFailurePopup extends StatelessWidget {
             ),
             child: SizedBox(
               width: 523,
-              height: 336,
+              height: 286,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(27, 45, 27, 26),
                 child: Column(
@@ -2817,12 +2817,8 @@ class _TransferFailurePopup extends StatelessWidget {
                     const Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _TransferFailureBodyLine('전화금융사고 및 기타금융사고 등록고객은 지급거래'),
-                        _TransferFailureBodyLine('불가합니다. 고객사고 정보 확인후 거래하세요.'),
-                        _TransferFailureBodyLine(
-                          '고객사고 등록으로 거래가 불가합니다. 신한은행 영업점',
-                        ),
-                        _TransferFailureBodyLine('또는 콜센터로 문의해 주시기 바랍니다.'),
+                        _TransferFailureBodyLine('전화금융사고 및 기타금융사고 등록고객은'),
+                        _TransferFailureBodyLine('지급거래 불가합니다.'),
                       ],
                     ),
                     const Spacer(),

@@ -1685,8 +1685,8 @@ void main() {
     }
     await tester.pumpAndSettle();
     expect(find.text('DEP20180'), findsOneWidget);
-    expect(find.text('전화금융사고 및 기타금융사고 등록고객은 지급거래'), findsOneWidget);
-    expect(find.text('또는 콜센터로 문의해 주시기 바랍니다.'), findsOneWidget);
+    expect(find.text('전화금융사고 및 기타금융사고 등록고객은'), findsOneWidget);
+    expect(find.text('지급거래 불가합니다.'), findsOneWidget);
     expect(find.text('확인'), findsOneWidget);
     final failureCode = tester.widget<Text>(
       find.byKey(const Key('transfer-failure-code')),
@@ -1697,12 +1697,7 @@ void main() {
       FontVariation('wght', 500),
     ]);
     final failureTexts = <Text>[
-      for (final body in [
-        '전화금융사고 및 기타금융사고 등록고객은 지급거래',
-        '불가합니다. 고객사고 정보 확인후 거래하세요.',
-        '고객사고 등록으로 거래가 불가합니다. 신한은행 영업점',
-        '또는 콜센터로 문의해 주시기 바랍니다.',
-      ])
+      for (final body in ['전화금융사고 및 기타금융사고 등록고객은', '지급거래 불가합니다.'])
         tester.widget(find.byKey(Key('transfer-failure-body-$body'))),
     ];
     for (final failureText in failureTexts) {
