@@ -6,6 +6,7 @@ import '../core/auth_service.dart';
 import 'bank_logo.dart';
 import 'data_management_screen.dart';
 import 'design_canvas.dart';
+import 'transaction_details_sheet.dart';
 import 'transfer_recipient_screen.dart';
 
 const _detailsInk = Color(0xFF141820);
@@ -287,6 +288,14 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
     );
   }
 
+  Future<void> _openTransactionDetails(LedgerTransaction transaction) {
+    return showTransactionDetailsSheet(
+      context,
+      transaction: transaction,
+      runningBalance: widget.dataStore.runningBalanceFor(transaction),
+    );
+  }
+
   Future<void> _openHistoryFilter() async {
     final now = _now;
     final currentYear = now.year;
@@ -398,6 +407,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
                       onFilterTap: _openHistoryFilter,
                       showTransactionBalances: _showTransactionBalances,
                       onBalanceVisibilityTap: _toggleTransactionBalances,
+                      onTransactionTap: _openTransactionDetails,
                     ),
                   ],
                 ),
@@ -880,6 +890,7 @@ class _TransactionList extends StatelessWidget {
     required this.onFilterTap,
     required this.showTransactionBalances,
     required this.onBalanceVisibilityTap,
+    required this.onTransactionTap,
   });
 
   final String accountName;
@@ -891,6 +902,7 @@ class _TransactionList extends StatelessWidget {
   final VoidCallback onFilterTap;
   final bool showTransactionBalances;
   final VoidCallback onBalanceVisibilityTap;
+  final ValueChanged<LedgerTransaction> onTransactionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -984,6 +996,7 @@ class _TransactionList extends StatelessWidget {
               '${_formatDetailsMoney(store.runningBalanceFor(transaction))}원',
           showBalance: showTransactionBalances,
           positive: signed >= 0,
+          onTap: () => onTransactionTap(transaction),
         ),
       );
       cursor += _TransactionLayoutMetrics.rowExtent;
@@ -2034,6 +2047,7 @@ class _TransactionRow extends StatelessWidget {
     required this.amount,
     required this.balance,
     required this.showBalance,
+    required this.onTap,
     this.positive = false,
   });
 
@@ -2045,6 +2059,7 @@ class _TransactionRow extends StatelessWidget {
   final String balance;
   final bool showBalance;
   final bool positive;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2053,70 +2068,79 @@ class _TransactionRow extends StatelessWidget {
       right: 28,
       top: top,
       height: 100,
-      child: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            top: 6,
-            width: 330,
-            height: 34,
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF27303D),
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -.8,
-              ),
-            ),
-          ),
-          Positioned(
-            right: 0,
-            top: 4,
-            child: Text(
-              amount,
-              style: TextStyle(
-                color: positive ? _detailsBlue : _detailsInk,
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -.8,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            top: 49,
-            child: Text(
-              key: Key('account-transaction-time-$transactionId'),
-              time,
-              style: const TextStyle(
-                color: _detailsSecondary,
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                fontVariations: [FontVariation('wght', 500)],
-                letterSpacing: -.5,
-              ),
-            ),
-          ),
-          if (showBalance)
-            Positioned(
-              right: 0,
-              top: 49,
-              child: Text(
-                key: Key('account-transaction-balance-$transactionId'),
-                balance,
-                style: const TextStyle(
-                  color: _detailsSecondary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  fontVariations: [FontVariation('wght', 500)],
-                  letterSpacing: -.5,
+      child: Semantics(
+        button: true,
+        label: '$title, $amount, 거래내역상세',
+        child: GestureDetector(
+          key: Key('account-transaction-$transactionId'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0,
+                top: 6,
+                width: 330,
+                height: 34,
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF27303D),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -.8,
+                  ),
                 ),
               ),
-            ),
-        ],
+              Positioned(
+                right: 0,
+                top: 4,
+                child: Text(
+                  amount,
+                  style: TextStyle(
+                    color: positive ? _detailsBlue : _detailsInk,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -.8,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                top: 49,
+                child: Text(
+                  key: Key('account-transaction-time-$transactionId'),
+                  time,
+                  style: const TextStyle(
+                    color: _detailsSecondary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    fontVariations: [FontVariation('wght', 500)],
+                    letterSpacing: -.5,
+                  ),
+                ),
+              ),
+              if (showBalance)
+                Positioned(
+                  right: 0,
+                  top: 49,
+                  child: Text(
+                    key: Key('account-transaction-balance-$transactionId'),
+                    balance,
+                    style: const TextStyle(
+                      color: _detailsSecondary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      fontVariations: [FontVariation('wght', 500)],
+                      letterSpacing: -.5,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
