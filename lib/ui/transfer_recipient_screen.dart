@@ -11,6 +11,7 @@ import 'auth_sheet.dart';
 import 'bank_logo.dart';
 import 'data_management_screen.dart';
 import 'design_canvas.dart';
+import 'pin_loading_overlay.dart';
 
 const _ink = Color(0xFF111827);
 const _muted = Color(0xFF818A99);
@@ -86,6 +87,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   String? _pinSetupError;
   int _pinFailedAttempts = 0;
   bool _pinBusy = false;
+  bool _showPinLoading = false;
 
   @override
   void initState() {
@@ -130,6 +132,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
       _account.isNotEmpty && _bank != null && _selectedSourceAccount != null;
 
   void _back() {
+    if (_showPinLoading) return;
     if (_stage == _TransferStage.pin) {
       setState(() => _stage = _TransferStage.confirmation);
     } else if (_stage == _TransferStage.confirmation) {
@@ -352,6 +355,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
       _pinSetupError = null;
       _pinFailedAttempts = 0;
       _pinBusy = false;
+      _showPinLoading = false;
       _stage = _TransferStage.pin;
     });
     if (needsProtectedPin) unawaited(_loadTransferPinState());
@@ -394,25 +398,44 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   }
 
   void _rearrangePinKeys() {
-    if (_pinInputLocked || _pinBusy) return;
+    if (_pinInputLocked || _pinBusy || _showPinLoading) return;
     setState(() => _pinKeys = _shuffledPinKeys(_pinKeys));
   }
 
   void _deletePinDigit() {
-    if (_pinDigits.isNotEmpty && !_pinInputLocked && !_pinBusy) {
+    if (_pinDigits.isNotEmpty &&
+        !_pinInputLocked &&
+        !_pinBusy &&
+        !_showPinLoading) {
       setState(_pinDigits.removeLast);
     }
   }
 
   Future<void> _appendPinDigit(String digit) async {
-    if (_pinDigits.length >= 4 || _pinInputLocked || _pinBusy) return;
+    if (_pinDigits.length >= 4 ||
+        _pinInputLocked ||
+        _pinBusy ||
+        _showPinLoading) {
+      return;
+    }
     var completed = false;
     setState(() {
       _pinDigits.add(digit);
       completed = _pinDigits.length == 4;
+      if (completed) {
+        _showPinLoading =
+            _pinMode == _TransferPinMode.legacy ||
+            _pinMode == _TransferPinMode.verify ||
+            (_pinMode == _TransferPinMode.confirm &&
+                _pendingTransferPin == _enteredTransferPin);
+      }
     });
     if (!completed) return;
-    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await Future<void>.delayed(
+      _showPinLoading
+          ? PinLoadingOverlay.minimumDisplayDuration
+          : const Duration(milliseconds: 180),
+    );
     if (mounted) await _submitTransferPin();
   }
 
@@ -441,48 +464,54 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
     if (!mounted || _pinBusy || _pinDigits.length != 4) return;
     final pin = _enteredTransferPin;
     final auth = widget.auth;
-    switch (_pinMode) {
-      case _TransferPinMode.loading:
-        return;
-      case _TransferPinMode.legacy:
-        await _completeTransferAfterPin();
-        return;
-      case _TransferPinMode.create:
-        setState(() {
-          _pendingTransferPin = pin;
-          _pinDigits.clear();
-          _pinSetupError = null;
-          _pinMode = _TransferPinMode.confirm;
-        });
-        return;
-      case _TransferPinMode.confirm:
-        if (_pendingTransferPin != pin) {
-          setState(() {
-            _pinDigits.clear();
-            _pinSetupError = '비밀번호가 일치하지 않아요. 다시 입력해주세요.';
-          });
+    try {
+      switch (_pinMode) {
+        case _TransferPinMode.loading:
           return;
-        }
-        if (auth == null) return;
-        setState(() => _pinBusy = true);
-        await auth.setPin(PinPurpose.transfer, pin);
-        if (!mounted) return;
-        await _completeTransferAfterPin();
-        return;
-      case _TransferPinMode.verify:
-        if (auth == null) return;
-        setState(() => _pinBusy = true);
-        final result = await auth.verifyPin(PinPurpose.transfer, pin);
-        if (!mounted) return;
-        if (result.matched) {
+        case _TransferPinMode.legacy:
           await _completeTransferAfterPin();
           return;
-        }
-        setState(() {
-          _pinBusy = false;
-          _pinDigits.clear();
-          _pinFailedAttempts = result.failedAttempts;
-        });
+        case _TransferPinMode.create:
+          setState(() {
+            _pendingTransferPin = pin;
+            _pinDigits.clear();
+            _pinSetupError = null;
+            _pinMode = _TransferPinMode.confirm;
+          });
+          return;
+        case _TransferPinMode.confirm:
+          if (_pendingTransferPin != pin) {
+            setState(() {
+              _pinDigits.clear();
+              _pinSetupError = '비밀번호가 일치하지 않아요. 다시 입력해주세요.';
+            });
+            return;
+          }
+          if (auth == null) return;
+          setState(() => _pinBusy = true);
+          await auth.setPin(PinPurpose.transfer, pin);
+          if (!mounted) return;
+          await _completeTransferAfterPin();
+          return;
+        case _TransferPinMode.verify:
+          if (auth == null) return;
+          setState(() => _pinBusy = true);
+          final result = await auth.verifyPin(PinPurpose.transfer, pin);
+          if (!mounted) return;
+          if (result.matched) {
+            await _completeTransferAfterPin();
+            return;
+          }
+          setState(() {
+            _pinBusy = false;
+            _pinDigits.clear();
+            _pinFailedAttempts = result.failedAttempts;
+          });
+      }
+    } finally {
+      if (mounted && _showPinLoading) {
+        setState(() => _showPinLoading = false);
+      }
     }
   }
 
@@ -511,6 +540,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
     final source = _selectedSourceAccount;
     if (source == null || _amount <= 0) return;
     if (!mounted) return;
+    setState(() => _showPinLoading = false);
     await _returnToHome();
   }
 
@@ -537,164 +567,195 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
     final actionButtonHeight = _stage == _TransferStage.confirmation
         ? 78.0
         : 79.0;
-    return PopScope(
+    final content = PopScope(
+      canPop: !_showPinLoading,
       onPopInvokedWithResult: (_, __) => showDeviceStatusBar(
         darkIcons: true,
         backgroundColor: const Color(0xFFF0F3FA),
       ),
-      child: DesignCanvas(
-        fullWidthBottomColor: androidPinFullBleed ? _pinBlue : null,
-        fullWidthBottomTop: androidPinFullBleed ? 870 : null,
-        fullWidthBottomKey: androidPinFullBleed
-            ? const Key('android-transfer-pin-blue-background')
-            : null,
-        child: Material(
-          color: Colors.white,
-          child: Stack(
-            children: [
-              _TopControls(
-                onBack: _back,
-                onManageRecipients: _openRecipientManagement,
-                showBack: _stage != _TransferStage.pin,
-                showRecipientActions:
-                    _stage == _TransferStage.recipient && !_manualEntry,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          DesignCanvas(
+            fullWidthBottomColor: androidPinFullBleed ? _pinBlue : null,
+            fullWidthBottomTop: androidPinFullBleed ? 870 : null,
+            fullWidthBottomKey: androidPinFullBleed
+                ? const Key('android-transfer-pin-blue-background')
+                : null,
+            child: Material(
+              color: Colors.white,
+              child: Stack(
+                children: [
+                  _TopControls(
+                    onBack: _back,
+                    onManageRecipients: _openRecipientManagement,
+                    showBack: _stage != _TransferStage.pin,
+                    showRecipientActions:
+                        _stage == _TransferStage.recipient && !_manualEntry,
+                  ),
+                  if (_stage == _TransferStage.confirmation)
+                    _TransferReviewPage(
+                      sourceAccount: sourceAccount!,
+                      bank: _bank ?? '토스뱅크',
+                      // The final review intentionally follows the banking
+                      // reference and shows the destination as digits only.
+                      account: AppDataStore.normalizedAccountNumber(_account),
+                      recipientName: _recipientName,
+                      recipientUsesHonorific: _destinationAccountId == null,
+                      amount: _amount,
+                      detailsExpanded: _reviewDetailsExpanded,
+                      onToggleDetails: () => setState(
+                        () => _reviewDetailsExpanded = !_reviewDetailsExpanded,
+                      ),
+                    )
+                  else if (_stage == _TransferStage.pin)
+                    _TransferPinPage(
+                      title: _transferPinTitle,
+                      enteredDigits: _pinDigits.length,
+                      keys: _pinKeys,
+                      errorMessage: _transferPinError,
+                      showReset:
+                          _pinMode == _TransferPinMode.verify &&
+                          _pinFailedAttempts > 0,
+                      inputEnabled:
+                          // The overlay blocks input while preserving the
+                          // keypad's white labels, just like the approved demo.
+                          _showPinLoading || (!_pinInputLocked && !_pinBusy),
+                      onDigit: _appendPinDigit,
+                      onDelete: _deletePinDigit,
+                      onRearrange: _rearrangePinKeys,
+                      onReset: _resetTransferPin,
+                    )
+                  else if (_stage == _TransferStage.amount &&
+                      sourceAccount != null)
+                    _AmountPage(
+                      sourceAccount: sourceAccount,
+                      bank: _bank ?? '토스뱅크',
+                      account: _account.isEmpty ? '100237698805' : _account,
+                      recipientName: _recipientName,
+                      recipientUsesHonorific: _destinationAccountId == null,
+                      amount: _amount,
+                      onDigit: _appendAmount,
+                      onDelete: _deleteAmount,
+                      onChooseSourceAccount: () =>
+                          setState(() => _sourceAccountSelectorVisible = true),
+                    )
+                  else if (_manualEntry)
+                    _ManualEntry(
+                      account: _account,
+                      bank: _bank,
+                      suggestions: _accountSuggestions,
+                      onDigit: _appendAccount,
+                      onDelete: _deleteAccount,
+                      onClear: () => setState(() => _account = ''),
+                      onChooseBank: _pickBank,
+                      onSelectSuggestion: _chooseRecipient,
+                    )
+                  else
+                    _RecipientLanding(
+                      ownAccounts: _ownAccounts,
+                      recipients: _savedRecipients,
+                      favoriteRecipientsExpanded: _favoriteRecipientsExpanded,
+                      myAccountsExpanded: _myAccountsExpanded,
+                      recentRecipientsExpanded: _recentRecipientsExpanded,
+                      onSearch: _searchRecipients,
+                      onEditFavorites: _openRecipientManagement,
+                      onToggleFavoriteRecipients: () => setState(
+                        () => _favoriteRecipientsExpanded =
+                            !_favoriteRecipientsExpanded,
+                      ),
+                      onToggleMyAccounts: () => setState(
+                        () => _myAccountsExpanded = !_myAccountsExpanded,
+                      ),
+                      onToggleRecentRecipients: () => setState(
+                        () => _recentRecipientsExpanded =
+                            !_recentRecipientsExpanded,
+                      ),
+                      onManual: _startManualEntry,
+                      onCamera: _startManualEntry,
+                      onSelect: _chooseRecipient,
+                      onToggleFavorite: _toggleFavorite,
+                    ),
+                  if ((_stage != _TransferStage.recipient || _manualEntry) &&
+                      _stage != _TransferStage.pin)
+                    Positioned(
+                      left: 28,
+                      right: 28,
+                      bottom: actionButtonBottom,
+                      height: actionButtonHeight,
+                      child: FilledButton(
+                        key: const Key('transfer-next'),
+                        onPressed: _stage == _TransferStage.amount
+                            ? (_amount > 0
+                                  ? () => setState(() {
+                                      _reviewDetailsExpanded = true;
+                                      _stage = _TransferStage.confirmation;
+                                    })
+                                  : null)
+                            : (_stage == _TransferStage.confirmation
+                                  ? _startPinEntry
+                                  : _canContinue && sourceAccount != null
+                                  ? _continueManualEntry
+                                  : null),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _blue,
+                          disabledBackgroundColor: const Color(0xFFF0F3F8),
+                          disabledForegroundColor: const Color(0xFF98A1B1),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          _stage == _TransferStage.confirmation ? '보내기' : '다음',
+                          style: TextStyle(
+                            fontSize: _manualEntry ? 22 : 23,
+                            fontWeight: _manualEntry
+                                ? FontWeight.w500
+                                : FontWeight.w700,
+                            fontVariations: [
+                              FontVariation('wght', _manualEntry ? 500 : 700),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_sourceAccountSelectorVisible)
+                    _SourceAccountSelector(
+                      accounts: _availableSourceAccounts,
+                      selectedAccount: sourceAccount!,
+                      onSelect: (account) => setState(() {
+                        _sourceAccountId = account.id;
+                        _sourceAccountSelectorVisible = false;
+                      }),
+                      onClose: () =>
+                          setState(() => _sourceAccountSelectorVisible = false),
+                    ),
+                ],
               ),
-              if (_stage == _TransferStage.confirmation)
-                _TransferReviewPage(
-                  sourceAccount: sourceAccount!,
-                  bank: _bank ?? '토스뱅크',
-                  // The final review intentionally follows the banking
-                  // reference and shows the destination as digits only.
-                  account: AppDataStore.normalizedAccountNumber(_account),
-                  recipientName: _recipientName,
-                  recipientUsesHonorific: _destinationAccountId == null,
-                  amount: _amount,
-                  detailsExpanded: _reviewDetailsExpanded,
-                  onToggleDetails: () => setState(
-                    () => _reviewDetailsExpanded = !_reviewDetailsExpanded,
-                  ),
-                )
-              else if (_stage == _TransferStage.pin)
-                _TransferPinPage(
-                  title: _transferPinTitle,
-                  enteredDigits: _pinDigits.length,
-                  keys: _pinKeys,
-                  errorMessage: _transferPinError,
-                  showReset:
-                      _pinMode == _TransferPinMode.verify &&
-                      _pinFailedAttempts > 0,
-                  inputEnabled: !_pinInputLocked && !_pinBusy,
-                  onDigit: _appendPinDigit,
-                  onDelete: _deletePinDigit,
-                  onRearrange: _rearrangePinKeys,
-                  onReset: _resetTransferPin,
-                )
-              else if (_stage == _TransferStage.amount && sourceAccount != null)
-                _AmountPage(
-                  sourceAccount: sourceAccount,
-                  bank: _bank ?? '토스뱅크',
-                  account: _account.isEmpty ? '100237698805' : _account,
-                  recipientName: _recipientName,
-                  recipientUsesHonorific: _destinationAccountId == null,
-                  amount: _amount,
-                  onDigit: _appendAmount,
-                  onDelete: _deleteAmount,
-                  onChooseSourceAccount: () =>
-                      setState(() => _sourceAccountSelectorVisible = true),
-                )
-              else if (_manualEntry)
-                _ManualEntry(
-                  account: _account,
-                  bank: _bank,
-                  suggestions: _accountSuggestions,
-                  onDigit: _appendAccount,
-                  onDelete: _deleteAccount,
-                  onClear: () => setState(() => _account = ''),
-                  onChooseBank: _pickBank,
-                  onSelectSuggestion: _chooseRecipient,
-                )
-              else
-                _RecipientLanding(
-                  ownAccounts: _ownAccounts,
-                  recipients: _savedRecipients,
-                  favoriteRecipientsExpanded: _favoriteRecipientsExpanded,
-                  myAccountsExpanded: _myAccountsExpanded,
-                  recentRecipientsExpanded: _recentRecipientsExpanded,
-                  onSearch: _searchRecipients,
-                  onEditFavorites: _openRecipientManagement,
-                  onToggleFavoriteRecipients: () => setState(
-                    () => _favoriteRecipientsExpanded =
-                        !_favoriteRecipientsExpanded,
-                  ),
-                  onToggleMyAccounts: () => setState(
-                    () => _myAccountsExpanded = !_myAccountsExpanded,
-                  ),
-                  onToggleRecentRecipients: () => setState(
-                    () =>
-                        _recentRecipientsExpanded = !_recentRecipientsExpanded,
-                  ),
-                  onManual: _startManualEntry,
-                  onCamera: _startManualEntry,
-                  onSelect: _chooseRecipient,
-                  onToggleFavorite: _toggleFavorite,
-                ),
-              if ((_stage != _TransferStage.recipient || _manualEntry) &&
-                  _stage != _TransferStage.pin)
-                Positioned(
-                  left: 28,
-                  right: 28,
-                  bottom: actionButtonBottom,
-                  height: actionButtonHeight,
-                  child: FilledButton(
-                    key: const Key('transfer-next'),
-                    onPressed: _stage == _TransferStage.amount
-                        ? (_amount > 0
-                              ? () => setState(() {
-                                  _reviewDetailsExpanded = true;
-                                  _stage = _TransferStage.confirmation;
-                                })
-                              : null)
-                        : (_stage == _TransferStage.confirmation
-                              ? _startPinEntry
-                              : _canContinue && sourceAccount != null
-                              ? _continueManualEntry
-                              : null),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _blue,
-                      disabledBackgroundColor: const Color(0xFFF0F3F8),
-                      disabledForegroundColor: const Color(0xFF98A1B1),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: Text(
-                      _stage == _TransferStage.confirmation ? '보내기' : '다음',
-                      style: TextStyle(
-                        fontSize: _manualEntry ? 22 : 23,
-                        fontWeight: _manualEntry
-                            ? FontWeight.w500
-                            : FontWeight.w700,
-                        fontVariations: [
-                          FontVariation('wght', _manualEntry ? 500 : 700),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              if (_sourceAccountSelectorVisible)
-                _SourceAccountSelector(
-                  accounts: _availableSourceAccounts,
-                  selectedAccount: sourceAccount!,
-                  onSelect: (account) => setState(() {
-                    _sourceAccountId = account.id;
-                    _sourceAccountSelectorVisible = false;
-                  }),
-                  onClose: () =>
-                      setState(() => _sourceAccountSelectorVisible = false),
-                ),
-            ],
+            ),
           ),
-        ),
+          if (_showPinLoading)
+            const Positioned.fill(
+              child: PinLoadingOverlay(key: Key('transfer-pin-loading')),
+            ),
+        ],
+      ),
+    );
+    // This route draws edge-to-edge. Keep the entire keypad and action button
+    // above Android's real navigation area, rather than lifting only the button
+    // into the keypad. Preserve the existing iOS canvas.
+    final mediaQuery = MediaQuery.of(context);
+    final bottomInset = Theme.of(context).platform == TargetPlatform.android
+        ? max(
+            mediaQuery.viewPadding.bottom,
+            mediaQuery.systemGestureInsets.bottom,
+          )
+        : 0.0;
+    return ColoredBox(
+      color: Colors.white,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: content,
       ),
     );
   }

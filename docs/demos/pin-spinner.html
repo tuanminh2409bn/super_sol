@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Super SOL · Demo vòng xoay PIN</title>
+  <link rel="icon" href="data:,">
+  <style>
+    @font-face { font-family: Noto; src: url('../../assets/fonts/NotoSansKR.ttf'); font-weight: 100 900; font-display: swap; }
+    :root { color-scheme: light; --blue: #005cfa; --ink: #141820; --muted: #606978; }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: #f3f5f8; color: var(--ink); font: 15px/1.5 system-ui, sans-serif; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #3d88ff; outline-offset: 4px; }
+    button:disabled { cursor: default; }
+    main { max-width: 1080px; margin: auto; padding: 30px 24px 38px; }
+    .eyebrow { color: var(--blue); font-size: 12px; letter-spacing: .12em; font-weight: 700; }
+    h1 { margin: 6px 0 8px; font-size: clamp(24px, 4vw, 32px); line-height: 1.25; letter-spacing: -.8px; }
+    .intro { margin: 0; color: var(--muted); max-width: 770px; }
+    .toolbar { margin: 22px 0 24px; display: flex; align-items: center; gap: 18px 26px; flex-wrap: wrap; padding: 16px 18px; background: white; border: 1px solid #e2e6ed; border-radius: 12px; }
+    .primary, .secondary { border: 0; padding: 10px 15px; border-radius: 8px; font-weight: 600; }
+    .primary { background: var(--blue); color: white; }
+    .secondary { background: #eaf0fc; color: #165ad0; }
+    .duration-control { display: flex; align-items: center; gap: 9px; }
+    .duration-control input { width: 110px; accent-color: var(--blue); }
+    output { font-variant-numeric: tabular-nums; min-width: 44px; }
+    .hold { display: flex; align-items: center; gap: 8px; }
+    .hold input { width: 17px; height: 17px; accent-color: var(--blue); }
+    .previews { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px; }
+    article { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+    h2 { margin: 0 0 3px; font-size: 18px; font-weight: 650; }
+    .caption { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    .phone { width: min(100%, 315px); aspect-ratio: 589 / 1280; position: relative; border-radius: 24px; overflow: hidden; background: white; box-shadow: 0 0 0 1px #dce1e9, 0 12px 30px #27364c12; }
+    .canvas { position: absolute; width: 589px; height: 1280px; top: 0; left: 0; transform-origin: top left; background: white; font-family: Noto, sans-serif; }
+    .statusbar { position: absolute; left: 44px; right: 44px; top: 26px; display: flex; align-items: center; justify-content: space-between; font-family: system-ui; font-size: 22px; font-weight: 600; pointer-events: none; }
+    .island { width: 166px; height: 43px; border-radius: 30px; background: #08090c; position: absolute; left: 211px; top: 18px; }
+    .signals { font-size: 19px; letter-spacing: 1px; }
+    .nav { position: absolute; top: 100px; width: 54px; height: 54px; padding: 10px; border: 0; color: #303641; background: transparent; }
+    .nav.back { left: 24px; }
+    .nav.close { right: 22px; }
+    .nav svg { width: 32px; height: 32px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .pin-title { position: absolute; left: 60px; right: 60px; top: 278px; margin: 0; text-align: center; color: #11141c; font-size: 34px; font-weight: 700; line-height: 1.45; letter-spacing: -1.7px; }
+    .transfer .pin-title { top: 286px; font-size: 32px; letter-spacing: -.9px; }
+    .dots { position: absolute; left: 139px; top: 422px; width: 312px; height: 34px; display: flex; align-items: center; justify-content: space-between; }
+    .transfer .dots { width: 224px; left: 182.5px; top: 377px; }
+    .dot { width: 29px; height: 29px; border-radius: 50%; border: 1.5px solid #8b919d; background: white; transition: background-color 100ms, border-color 100ms; }
+    .dot.focus { border: 3px solid #0071f4; }
+    .transfer .dot.focus { border-width: 1.5px; }
+    .dot.filled { background: #0567f6; border-color: #0567f6; }
+    .keypad { position: absolute; left: 0; top: 829px; width: 589px; height: 451px; padding-top: 3px; background: #005cf9; }
+    .transfer .keypad { top: 870px; height: 410px; background: #005dfa; }
+    .keys { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 90px; }
+    .key { width: 100%; color: white; border: 0; background: transparent; font-family: Noto; font-size: 32px; font-weight: 600; padding: 0; touch-action: manipulation; }
+    .key:hover:not(:disabled) { background: #ffffff0b; }
+    .key:active:not(:disabled) { background: #ffffff22; }
+    .key.utility { font-size: 22px; }
+    .key svg { width: 36px; height: 36px; vertical-align: middle; fill: none; stroke: white; stroke-width: 3; }
+    .login-method { position: absolute; top: 357px; left: 150px; width: 290px; height: 50px; border: 0; color: white; background: transparent; font-family: Noto; font-size: 21px; font-weight: 600; }
+    .home-indicator { position: absolute; bottom: 11px; width: 205px; height: 7px; left: 192px; background: white; border-radius: 8px; pointer-events: none; }
+    .loading { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: #0f14200f; opacity: 0; visibility: hidden; transition: opacity 120ms; }
+    .loading.visible { opacity: 1; visibility: visible; }
+    .spinner { width: 56px; height: 56px; animation: turn 500ms linear infinite; animation-play-state: paused; }
+    .visible .spinner { animation-play-state: running; }
+    .spinner circle { fill: none; stroke-width: 5; }
+    .spinner .arc { stroke: #a6a6a6; stroke-linecap: round; stroke-dasharray: 12 88; }
+    @keyframes turn { to { transform: rotate(360deg); } }
+    .result { position: absolute; inset: 0; z-index: 6; background: white; display: none; overflow: hidden; }
+    .result.visible { display: block; animation: appear 250ms ease-out; }
+    .result img { width: 589px; height: 1280px; object-fit: contain; }
+    .result-note { position: absolute; bottom: 110px; left: 50px; right: 50px; padding: 20px; color: #165ad0; background: #edf3ff; border: 1px solid #c4d7ff; border-radius: 15px; text-align: center; font: 20px/1.5 Noto; }
+    .error-backdrop { position: absolute; inset: 0; display: grid; place-items: center; background: #0000008a; }
+    .error-dialog { width: 523px; padding: 45px 27px 26px; border-radius: 18px; background: white; }
+    .error-code { color: #ff5c73; margin: 0 0 15px; font: 500 20.5px/1.38 Noto; }
+    .error-body { color: #505866; font: 500 20.5px/1.54 Noto; letter-spacing: -.45px; margin: 0 0 28px; }
+    .error-dialog button { width: 100%; height: 67px; border: 0; border-radius: 14px; background: #035cf8; color: white; font: 600 22px Noto; }
+    @keyframes appear { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+    .screen-actions { display: flex; gap: 8px; margin-top: 15px; }
+    .screen-state { margin: 9px 0 0; font-size: 13px; color: var(--muted); text-align: center; min-height: 21px; }
+    details { margin-top: 28px; padding: 14px 18px; border: 1px solid #e0e5ed; border-radius: 10px; background: white; color: var(--muted); }
+    summary { cursor: pointer; color: #394456; font-weight: 600; }
+    details p { margin: 10px 0 0; max-width: 860px; font-size: 13px; }
+    @media (max-width: 640px) { main { padding: 22px 16px; } .previews { grid-template-columns: 1fr; gap: 32px; } .toolbar { gap: 14px; } .duration-control { flex-wrap: wrap; } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2200ms; } .dot, .loading { transition: none; } .result.visible { animation: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">SUPER SOL · BẢN XEM TRƯỚC</div>
+    <h1>Vòng xoay sau khi nhập mật khẩu</h1>
+    <p class="intro">Bấm bàn phím hoặc “Chạy demo”. Nhập đủ PIN → vòng xoay → màn hình tiếp theo.</p>
+  </header>
+  <div class="toolbar" aria-label="Điều khiển demo">
+    <button class="primary" id="play-both">Chạy cả hai</button>
+    <label class="duration-control">Thời gian tải <input id="duration" type="range" min="400" max="2000" step="100" value="800"><output id="duration-output" for="duration">0,8 s</output></label>
+    <label class="hold"><input id="hold" type="checkbox">Giữ vòng xoay để xem kỹ</label>
+  </div>
+  <section class="previews" aria-label="Hai màn hình nhập mật khẩu">
+    <article data-mode="login">
+      <h2>Mật khẩu vào App</h2>
+      <p class="caption">6 số · chuyển sang Home</p>
+      <div class="phone login"><div class="canvas">
+        <div class="statusbar" aria-hidden="true"><span>23:12</span><span class="signals">▮▮▮ ◔ ▰</span></div><div class="island" aria-hidden="true"></div>
+        <button class="nav back" aria-label="Bắt đầu lại"><svg viewBox="0 0 32 32"><path d="M20 5 9 16l11 11"/></svg></button>
+        <p class="pin-title" lang="ko">신한인증서 비밀번호를<br>입력해주세요</p>
+        <div class="dots" role="img" aria-label="Chưa nhập PIN"></div>
+        <div class="keypad"><div class="keys"></div><button class="login-method" lang="ko">로그인 방법 다시 선택 ﹀</button><div class="home-indicator"></div></div>
+        <div class="loading" aria-hidden="true"><svg class="spinner" viewBox="0 0 56 56" role="img" aria-label="Đang xác thực"><circle class="arc" cx="28" cy="28" r="22" pathLength="100" transform="rotate(-90 28 28)"/></svg></div>
+        <div class="result"><img src="../../test/goldens/3_1_home.png" alt="Màn hình Home của App"><div class="result-note">Đã hoàn tất bản xem trước.<br>Bấm “Chạy lại” để xem tiếp.</div></div>
+      </div></div>
+      <div class="screen-actions"><button class="primary play">Chạy demo</button><button class="secondary reset">Chạy lại</button></div>
+      <p class="screen-state" role="status" aria-live="polite">Sẵn sàng nhập 6 số</p>
+    </article>
+    <article data-mode="transfer">
+      <h2>Mật khẩu chuyển khoản</h2>
+      <p class="caption">4 số · trở về Home và thông báo lỗi</p>
+      <div class="phone transfer"><div class="canvas">
+        <div class="statusbar" aria-hidden="true"><span>23:13</span><span class="signals">▮▮▮ ◔ ▰</span></div><div class="island" aria-hidden="true"></div>
+        <button class="nav close" aria-label="Bắt đầu lại"><svg viewBox="0 0 32 32"><path d="m6 6 20 20M26 6 6 26"/></svg></button>
+        <p class="pin-title" lang="ko">계좌 비밀번호</p>
+        <div class="dots" role="img" aria-label="Chưa nhập PIN"></div>
+        <div class="keypad"><div class="keys"></div><div class="home-indicator"></div></div>
+        <div class="loading" aria-hidden="true"><svg class="spinner" viewBox="0 0 56 56" role="img" aria-label="Đang xác thực"><circle class="arc" cx="28" cy="28" r="22" pathLength="100" transform="rotate(-90 28 28)"/></svg></div>
+        <div class="result"><img src="../../test/goldens/3_1_home.png" alt="Màn hình Home của App"><div class="error-backdrop"><div class="error-dialog" role="dialog" aria-label="Thông báo lỗi chuyển khoản" lang="ko"><p class="error-code">DEP20180</p><p class="error-body">전화금융사고 및 기타금융사고 등록고객은 지급거래<br>불가합니다. 고객사고 정보 확인후 거래하세요.<br> 고객사고 등록으로 거래가 불가합니다. 신한은행 영업점<br>또는 콜센터로 문의해 주시기 바랍니다.</p><button class="confirm">확인</button></div></div></div>
+      </div></div>
+      <div class="screen-actions"><button class="primary play">Chạy demo</button><button class="secondary reset">Chạy lại</button></div>
+      <p class="screen-state" role="status" aria-live="polite">Sẵn sàng nhập 4 số</p>
+    </article>
+  </section>
+  <details><summary>Đối chiếu video và phạm vi demo</summary><p>Đã xem 1.MP4 (21,06 giây) và 3.mp4 (58,53 giây), kiểm tra các đoạn chuyển trạng thái ở bước 0,05 giây/khung hình. Video thể hiện 6 chấm PIN vào App, 4 chấm PIN chuyển khoản và bàn phím xanh. Vòng xoay tròn không hiện rõ trong nguồn; theo yêu cầu, loading là một cung ngắn màu xám nhạt ở giữa màn hình, không có vòng nền mờ, quay một vòng trong 0,5 giây. Bố cục dựa trên giao diện hiện có của dự án. Thời gian tải 0,8 giây là giá trị demo, có thể điều chỉnh phía trên.</p><p>Demo chỉ mô phỏng giao diện, không lưu chữ số đã bấm và không gửi dữ liệu. Chưa tích hợp vào luồng xác thực Flutter.</p></details>
+</main>
+<script>
+  const durationInput = document.querySelector('#duration');
+  const holdInput = document.querySelector('#hold');
+  durationInput.addEventListener('input', () => {
+    document.querySelector('#duration-output').textContent = (Number(durationInput.value) / 1000).toLocaleString('vi-VN') + ' s';
+  });
+  const backspace = '<svg viewBox="0 0 36 36" aria-hidden="true"><path d="M13 7H32V29H13L3 18Z"/><path d="m17 12 10 12m0-12L17 24"/></svg>';
+  const demos = [...document.querySelectorAll('article[data-mode]')].map(article => {
+    const login = article.dataset.mode === 'login';
+    const count = login ? 6 : 4;
+    const phone = article.querySelector('.phone');
+    const canvas = article.querySelector('.canvas');
+    const dots = article.querySelector('.dots');
+    const stateLabel = article.querySelector('.screen-state');
+    const loading = article.querySelector('.loading');
+    const result = article.querySelector('.result');
+    const playButton = article.querySelector('.play');
+    const keys = article.querySelector('.keys');
+    let order = login ? [3,6,5,1,4,9,2,0,7,8] : [5,1,7,0,4,8,9,6,3,2];
+    let entered = 0, phase = 'input', timer, generation = 0;
+    new ResizeObserver(() => { canvas.style.transform = `scale(${phone.clientWidth / 589})`; }).observe(phone);
+    dots.innerHTML = '<span class="dot" aria-hidden="true"></span>'.repeat(count);
+    function update() {
+      [...dots.children].forEach((dot, i) => {
+        dot.classList.toggle('filled', i < entered);
+        dot.classList.toggle('focus', i === entered);
+      });
+      dots.setAttribute('aria-label', `Đã nhập ${entered} trên ${count} số`);
+      phone.setAttribute('aria-busy', String(phase === 'loading'));
+      canvas.querySelectorAll('.nav, .pin-title, .dots, .keypad').forEach(element => {
+        element.inert = phase === 'result';
+      });
+      keys.querySelectorAll('button').forEach(button => { button.disabled = phase !== 'input'; });
+      article.querySelector('.login-method')?.toggleAttribute('disabled', phase !== 'input');
+      playButton.disabled = phase === 'typing' || phase === 'loading';
+    }
+    function finish() {
+      if (phase !== 'loading') return;
+      clearTimeout(timer);
+      phase = 'result'; loading.classList.remove('visible'); loading.setAttribute('aria-hidden', 'true');
+      result.classList.add('visible'); stateLabel.textContent = login ? 'Đã chuyển sang Home' : 'Đã hiện thông báo lỗi';
+      update();
+    }
+    function startLoading() {
+      phase = 'loading'; update();
+      loading.classList.add('visible'); loading.setAttribute('aria-hidden', 'false');
+      stateLabel.textContent = holdInput.checked ? 'Đang giữ vòng xoay · bỏ chọn để tiếp tục' : 'Đã đủ PIN · đang xác thực';
+      if (!holdInput.checked) timer = setTimeout(finish, Number(durationInput.value));
+    }
+    function add() {
+      if (phase !== 'input' || entered === count) return;
+      entered++; update(); stateLabel.textContent = `Đã nhập ${entered}/${count} số`;
+      if (entered === count) startLoading();
+    }
+    function renderKeys() {
+      keys.replaceChildren();
+      const entries = [...order.slice(0,9), 'shuffle', order[9], 'delete'];
+      entries.forEach(value => {
+        const button = document.createElement('button');
+        button.className = 'key' + (typeof value === 'string' ? ' utility' : '');
+        if (value === 'delete') { button.innerHTML = backspace; button.setAttribute('aria-label', 'Xóa một số'); }
+        else { button.textContent = value === 'shuffle' ? '재배열' : value; button.setAttribute('aria-label', value === 'shuffle' ? 'Đổi thứ tự bàn phím' : `Số ${value}`); }
+        button.addEventListener('click', () => {
+          if (phase !== 'input') return;
+          if (value === 'delete') { entered = Math.max(0, entered - 1); update(); stateLabel.textContent = `Đã nhập ${entered}/${count} số`; }
+          else if (value === 'shuffle') { order = [...order.slice(3), ...order.slice(0,3)]; renderKeys(); update(); }
+          else add();
+        });
+        keys.append(button);
+      });
+    }
+    function reset() {
+      generation++; clearTimeout(timer); phase = 'input'; entered = 0;
+      loading.classList.remove('visible'); loading.setAttribute('aria-hidden', 'true');
+      result.classList.remove('visible'); article.querySelector('.error-backdrop')?.removeAttribute('hidden');
+      stateLabel.textContent = `Sẵn sàng nhập ${count} số`; update();
+    }
+    function play() {
+      reset(); phase = 'typing'; update(); const currentGeneration = generation;
+      const typeNext = () => {
+        if (currentGeneration !== generation) return;
+        entered++; update(); stateLabel.textContent = `Đã nhập ${entered}/${count} số`;
+        if (entered === count) startLoading(); else timer = setTimeout(typeNext, 180);
+      };
+      timer = setTimeout(typeNext, 160);
+    }
+    playButton.addEventListener('click', play);
+    article.querySelector('.reset').addEventListener('click', reset);
+    article.querySelector('.nav').addEventListener('click', reset);
+    article.querySelector('.login-method')?.addEventListener('click', reset);
+    article.querySelector('.confirm')?.addEventListener('click', () => {
+      article.querySelector('.error-backdrop').hidden = true; stateLabel.textContent = 'Đã đóng thông báo lỗi';
+    });
+    holdInput.addEventListener('change', () => {
+      if (phase !== 'loading') return;
+      clearTimeout(timer);
+      if (holdInput.checked) stateLabel.textContent = 'Đang giữ vòng xoay · bỏ chọn để tiếp tục';
+      else { stateLabel.textContent = 'Đang xác thực'; timer = setTimeout(finish, Number(durationInput.value)); }
+    });
+    renderKeys(); update();
+    return { play, reset };
+  });
+  document.querySelector('#play-both').addEventListener('click', () => demos.forEach(demo => demo.play()));
+</script>
+</body>
+</html>

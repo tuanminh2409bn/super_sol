@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +42,125 @@ void main() {
     expect(find.text('자산'), findsOneWidget);
     expect(find.text('ĐĂNG NHẬP'), findsOneWidget);
   });
+
+  testWidgets(
+    'app PIN loading appears only after six digits and precedes Home',
+    (tester) async {
+      _configureMockupViewport(tester);
+      await tester.pumpWidget(_TestHost(home: PinScreen(auth: AuthService())));
+      for (final digit in '12345'.split('')) {
+        await tester.tap(find.byKey(Key('app-pin-key-$digit')));
+      }
+      await tester.pump();
+      expect(find.byKey(const Key('app-pin-loading')), findsNothing);
+      await tester.tap(find.byKey(const Key('app-pin-key-6')));
+      await tester.pump();
+      expect(find.byKey(const Key('app-pin-loading')), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(find.byKey(const Key('app-pin-loading')), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('app-pin-loading')), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('transfer PIN loading appears after four digits before failure', (
+    tester,
+  ) async {
+    _configureMockupViewport(tester);
+    await _openTransferPinScreen(tester, platform: TargetPlatform.android);
+    for (final digit in '123'.split('')) {
+      await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
+    }
+    await tester.pump();
+    expect(find.byKey(const Key('transfer-pin-loading')), findsNothing);
+    await tester.tap(find.byKey(const Key('transfer-pin-key-4')));
+    await tester.pump();
+    expect(find.byKey(const Key('transfer-pin-loading')), findsOneWidget);
+    expect(find.text('DEP20180'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.byKey(const Key('transfer-pin-loading')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('transfer-pin-loading')), findsNothing);
+    expect(find.text('DEP20180'), findsOneWidget);
+  });
+
+  for (final purpose in PinPurpose.values) {
+    testWidgets(
+      '$purpose loading waits for verification and recovers on error',
+      (tester) async {
+        _configureMockupViewport(tester);
+        final auth = _PendingPinAuthService();
+        final appAccess = purpose == PinPurpose.appAccess;
+        final pin = appAccess ? '123456' : '1234';
+        final prefix = appAccess ? 'app' : 'transfer';
+        await auth.setPin(purpose, pin);
+        if (appAccess) {
+          await tester.pumpWidget(_TestHost(home: PinScreen(auth: auth)));
+          await tester.pumpAndSettle();
+        } else {
+          await _openTransferPinScreen(
+            tester,
+            platform: TargetPlatform.iOS,
+            auth: auth,
+          );
+        }
+        for (final digit in pin.split('')) {
+          await tester.tap(find.byKey(Key('$prefix-pin-key-$digit')));
+        }
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 800));
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.byKey(Key('$prefix-pin-loading')), findsOneWidget);
+        expect(auth.verifications, 1);
+        // The overlay blocks every control, not just extra digits.
+        await tester.tapAt(
+          tester.getCenter(find.byKey(Key('$prefix-pin-delete'))),
+        );
+        await tester.pump();
+        auth.pending.complete(
+          const PinVerificationResult(
+            configured: true,
+            failedAttempts: 1,
+            matched: false,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(Key('$prefix-pin-loading')), findsNothing);
+        expect(find.text('비밀번호가 일치하지 않아요. (1/5)'), findsOneWidget);
+        expect(find.text('DEP20180'), findsNothing);
+        expect(find.byType(HomeScreen), findsNothing);
+      },
+    );
+
+    testWidgets('$purpose loading is disposed safely when the screen closes', (
+      tester,
+    ) async {
+      _configureMockupViewport(tester);
+      final appAccess = purpose == PinPurpose.appAccess;
+      if (appAccess) {
+        await tester.pumpWidget(
+          _TestHost(home: PinScreen(auth: AuthService())),
+        );
+      } else {
+        await _openTransferPinScreen(tester, platform: TargetPlatform.android);
+      }
+      final prefix = appAccess ? 'app' : 'transfer';
+      for (final digit in (appAccess ? '123456' : '1234').split('')) {
+        await tester.tap(find.byKey(Key('$prefix-pin-key-$digit')));
+      }
+      await tester.pump();
+      expect(find.byKey(Key('$prefix-pin-loading')), findsOneWidget);
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+      expect(find.byType(HomeScreen), findsNothing);
+      expect(find.text('DEP20180'), findsNothing);
+    });
+  }
 
   testWidgets('login PIN digits and rearrange label use weight 600', (
     tester,
@@ -1906,7 +2027,7 @@ void main() {
       for (final digit in '0000'.split('')) {
         await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
       }
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 800));
       expect(find.text('비밀번호가 일치하지 않아요. (1/5)'), findsOneWidget);
       expect(find.byKey(const Key('transfer-pin-reset')), findsOneWidget);
       expect(find.text('DEP20180'), findsNothing);
@@ -1914,7 +2035,7 @@ void main() {
       for (final digit in '0000'.split('')) {
         await tester.tap(find.byKey(Key('transfer-pin-key-$digit')));
       }
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(const Duration(milliseconds: 800));
       expect(find.text('비밀번호가 일치하지 않아요. (2/5)'), findsOneWidget);
 
       for (final digit in '1234'.split('')) {
@@ -2636,5 +2757,16 @@ class _SignedInAuthService extends AuthService {
   @override
   Future<void> signOut() async {
     signedOut = true;
+  }
+}
+
+class _PendingPinAuthService extends _SignedInAuthService {
+  final pending = Completer<PinVerificationResult>();
+  int verifications = 0;
+
+  @override
+  Future<PinVerificationResult> verifyPin(PinPurpose purpose, String pin) {
+    verifications++;
+    return pending.future;
   }
 }

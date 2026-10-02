@@ -9,6 +9,7 @@ import '../core/pin_security.dart';
 import 'auth_sheet.dart';
 import 'design_canvas.dart';
 import 'home_screen.dart';
+import 'pin_loading_overlay.dart';
 
 class PinScreen extends StatefulWidget {
   const PinScreen({super.key, required this.auth});
@@ -40,6 +41,7 @@ class _PinScreenState extends State<PinScreen> {
   final List<int> _keypadDigits = List<int>.of(_initialKeypadDigits);
   bool _navigating = false;
   bool _busy = false;
+  bool _showPinLoading = false;
   _AccessPinMode _mode = _AccessPinMode.loading;
   String? _pendingPin;
   String? _setupError;
@@ -53,20 +55,45 @@ class _PinScreenState extends State<PinScreen> {
   }
 
   void _addDigit(int digit) {
-    if (_digits.length == 6 || _navigating || _busy || _inputLocked) return;
-    setState(() => _digits.add(digit));
+    if (_digits.length == 6 ||
+        _navigating ||
+        _busy ||
+        _showPinLoading ||
+        _inputLocked) {
+      return;
+    }
+    setState(() {
+      _digits.add(digit);
+      if (_digits.length == 6) {
+        _showPinLoading =
+            _mode == _AccessPinMode.legacy ||
+            _mode == _AccessPinMode.verify ||
+            (_mode == _AccessPinMode.confirm && _pendingPin == _enteredPin);
+      }
+    });
     if (_digits.length == 6) {
-      Future<void>.delayed(const Duration(milliseconds: 150), _submitPin);
+      Future<void>.delayed(
+        _showPinLoading
+            ? PinLoadingOverlay.minimumDisplayDuration
+            : const Duration(milliseconds: 150),
+        _submitPin,
+      );
     }
   }
 
   void _removeDigit() {
-    if (_digits.isEmpty || _navigating || _busy || _inputLocked) return;
+    if (_digits.isEmpty ||
+        _navigating ||
+        _busy ||
+        _showPinLoading ||
+        _inputLocked) {
+      return;
+    }
     setState(() => _digits.removeLast());
   }
 
   void _shuffle() {
-    if (_busy || _inputLocked) return;
+    if (_busy || _showPinLoading || _inputLocked) return;
     setState(() {
       final previousOrder = List<int>.of(_keypadDigits);
       _keypadDigits.shuffle();
@@ -120,46 +147,52 @@ class _PinScreenState extends State<PinScreen> {
   Future<void> _submitPin() async {
     if (!mounted || _busy || _digits.length != 6) return;
     final pin = _enteredPin;
-    switch (_mode) {
-      case _AccessPinMode.loading:
-        return;
-      case _AccessPinMode.legacy:
-        _openHome();
-        return;
-      case _AccessPinMode.create:
-        setState(() {
-          _pendingPin = pin;
-          _digits.clear();
-          _setupError = null;
-          _mode = _AccessPinMode.confirm;
-        });
-        return;
-      case _AccessPinMode.confirm:
-        if (_pendingPin != pin) {
-          setState(() {
-            _digits.clear();
-            _setupError = '비밀번호가 일치하지 않아요. 다시 입력해주세요.';
-          });
+    try {
+      switch (_mode) {
+        case _AccessPinMode.loading:
           return;
-        }
-        setState(() => _busy = true);
-        await widget.auth.setPin(PinPurpose.appAccess, pin);
-        if (!mounted) return;
-        _openHome();
-        return;
-      case _AccessPinMode.verify:
-        setState(() => _busy = true);
-        final result = await widget.auth.verifyPin(PinPurpose.appAccess, pin);
-        if (!mounted) return;
-        if (result.matched) {
+        case _AccessPinMode.legacy:
           _openHome();
           return;
-        }
-        setState(() {
-          _busy = false;
-          _digits.clear();
-          _failedAttempts = result.failedAttempts;
-        });
+        case _AccessPinMode.create:
+          setState(() {
+            _pendingPin = pin;
+            _digits.clear();
+            _setupError = null;
+            _mode = _AccessPinMode.confirm;
+          });
+          return;
+        case _AccessPinMode.confirm:
+          if (_pendingPin != pin) {
+            setState(() {
+              _digits.clear();
+              _setupError = '비밀번호가 일치하지 않아요. 다시 입력해주세요.';
+            });
+            return;
+          }
+          setState(() => _busy = true);
+          await widget.auth.setPin(PinPurpose.appAccess, pin);
+          if (!mounted) return;
+          _openHome();
+          return;
+        case _AccessPinMode.verify:
+          setState(() => _busy = true);
+          final result = await widget.auth.verifyPin(PinPurpose.appAccess, pin);
+          if (!mounted) return;
+          if (result.matched) {
+            _openHome();
+            return;
+          }
+          setState(() {
+            _busy = false;
+            _digits.clear();
+            _failedAttempts = result.failedAttempts;
+          });
+      }
+    } finally {
+      if (mounted && _showPinLoading) {
+        setState(() => _showPinLoading = false);
+      }
     }
   }
 
@@ -184,6 +217,7 @@ class _PinScreenState extends State<PinScreen> {
   }
 
   Future<void> _goBack() async {
+    if (_showPinLoading) return;
     final navigator = Navigator.of(context);
     if (navigator.canPop()) {
       navigator.pop();
@@ -236,235 +270,242 @@ class _PinScreenState extends State<PinScreen> {
         final canvasTop = (constraints.maxHeight - canvasHeight) / 2;
         final keypadTop = canvasTop + (829 * scale);
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            const ColoredBox(color: Colors.white),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: keypadTop,
-              bottom: 0,
-              child: const ColoredBox(color: Color(0xFF005CF9)),
-            ),
-            DesignCanvas(
-              backgroundColor: Colors.transparent,
-              child: Stack(
-                children: [
-                  const Positioned(
-                    left: 0,
-                    top: 0,
-                    right: 0,
-                    height: 829,
-                    child: ColoredBox(color: Colors.white),
-                  ),
-                  Positioned(
-                    left: 25,
-                    top: 104,
-                    width: 48,
-                    height: 48,
-                    child: IconButton(
-                      key: const Key('pin-back'),
-                      onPressed: _goBack,
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        size: 25,
-                        color: Color(0xFF303641),
-                      ),
+        return PopScope(
+          canPop: !_showPinLoading,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: Colors.white),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: keypadTop,
+                bottom: 0,
+                child: const ColoredBox(color: Color(0xFF005CF9)),
+              ),
+              DesignCanvas(
+                backgroundColor: Colors.transparent,
+                child: Stack(
+                  children: [
+                    const Positioned(
+                      left: 0,
+                      top: 0,
+                      right: 0,
+                      height: 829,
+                      child: ColoredBox(color: Colors.white),
                     ),
-                  ),
-                  Positioned(
-                    left: 100,
-                    right: 100,
-                    top: 276,
-                    height: 110,
-                    child: Center(
-                      child: Text(
-                        _title,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF11141C),
-                          fontSize: 34,
-                          fontWeight: FontWeight.w700,
-                          height: 1.45,
-                          letterSpacing: -1.7,
+                    Positioned(
+                      left: 25,
+                      top: 104,
+                      width: 48,
+                      height: 48,
+                      child: IconButton(
+                        key: const Key('pin-back'),
+                        onPressed: _goBack,
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 25,
+                          color: Color(0xFF303641),
                         ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: 139,
-                    top: 422,
-                    width: 312,
-                    height: 34,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: List.generate(6, (index) {
-                        final active = index < _digits.length;
-                        final focused = index == _digits.length;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 100),
-                          width: 29,
-                          height: 29,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: active
-                                ? const Color(0xFF0567F6)
-                                : Colors.white,
-                            border: Border.all(
-                              color: focused
-                                  ? const Color(0xFF0071F4)
-                                  : const Color(0xFF8B919D),
-                              width: focused ? 3 : 1.5,
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                  if (_errorMessage case final message?)
                     Positioned(
-                      key: const Key('app-pin-error'),
-                      left: 70,
-                      right: 70,
-                      top: 482,
-                      height: 45,
+                      left: 100,
+                      right: 100,
+                      top: 276,
+                      height: 110,
                       child: Center(
                         child: Text(
-                          message,
+                          _title,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Color(0xFFE33232),
-                            fontSize: 22,
-                            fontWeight: FontWeight.w500,
-                            fontVariations: [FontVariation('wght', 500)],
-                            letterSpacing: -.7,
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (_mode == _AccessPinMode.verify && _failedAttempts > 0)
-                    Positioned(
-                      left: 204,
-                      top: 735,
-                      width: 181,
-                      height: 58,
-                      child: FilledButton(
-                        key: const Key('app-pin-reset'),
-                        onPressed: _busy ? null : _resetPin,
-                        style: FilledButton.styleFrom(
-                          foregroundColor: const Color(0xFF111827),
-                          backgroundColor: const Color(0xFFF3F6FA),
-                          disabledBackgroundColor: const Color(0xFFF3F6FA),
-                          shape: const StadiumBorder(),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          '비밀번호 재설정',
                           style: TextStyle(
-                            fontSize: 20,
+                            color: Color(0xFF11141C),
+                            fontSize: 34,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: -.6,
+                            height: 1.45,
+                            letterSpacing: -1.7,
                           ),
                         ),
                       ),
                     ),
-                  Positioned(
-                    left: 0,
-                    top: 829,
-                    right: 0,
-                    bottom: 0,
-                    child: Stack(
-                      children: [
-                        for (
-                          var index = 0;
-                          index < _keypadDigits.length;
-                          index++
-                        )
-                          _Key(
-                            key: Key('app-pin-key-${_keypadDigits[index]}'),
-                            x: _keypadPositions[index].dx,
-                            y: _keypadPositions[index].dy,
-                            label: '${_keypadDigits[index]}',
-                            onTap: () => _addDigit(_keypadDigits[index]),
-                          ),
-                        Positioned(
-                          left: 50,
-                          top: 284,
-                          width: 96,
-                          height: 54,
-                          child: TextButton(
-                            key: const Key('app-pin-rearrange'),
-                            onPressed: _shuffle,
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.zero,
+                    Positioned(
+                      left: 139,
+                      top: 422,
+                      width: 312,
+                      height: 34,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: List.generate(6, (index) {
+                          final active = index < _digits.length;
+                          final focused = index == _digits.length;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 100),
+                            width: 29,
+                            height: 29,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: active
+                                  ? const Color(0xFF0567F6)
+                                  : Colors.white,
+                              border: Border.all(
+                                color: focused
+                                    ? const Color(0xFF0071F4)
+                                    : const Color(0xFF8B919D),
+                                width: focused ? 3 : 1.5,
+                              ),
                             ),
-                            child: const Text(
-                              '재배열',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w600,
+                          );
+                        }),
+                      ),
+                    ),
+                    if (_errorMessage case final message?)
+                      Positioned(
+                        key: const Key('app-pin-error'),
+                        left: 70,
+                        right: 70,
+                        top: 482,
+                        height: 45,
+                        child: Center(
+                          child: Text(
+                            message,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFE33232),
+                              fontSize: 22,
+                              fontWeight: FontWeight.w500,
+                              fontVariations: [FontVariation('wght', 500)],
+                              letterSpacing: -.7,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_mode == _AccessPinMode.verify && _failedAttempts > 0)
+                      Positioned(
+                        left: 204,
+                        top: 735,
+                        width: 181,
+                        height: 58,
+                        child: FilledButton(
+                          key: const Key('app-pin-reset'),
+                          onPressed: _busy ? null : _resetPin,
+                          style: FilledButton.styleFrom(
+                            foregroundColor: const Color(0xFF111827),
+                            backgroundColor: const Color(0xFFF3F6FA),
+                            disabledBackgroundColor: const Color(0xFFF3F6FA),
+                            shape: const StadiumBorder(),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            '비밀번호 재설정',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -.6,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      left: 0,
+                      top: 829,
+                      right: 0,
+                      bottom: 0,
+                      child: Stack(
+                        children: [
+                          for (
+                            var index = 0;
+                            index < _keypadDigits.length;
+                            index++
+                          )
+                            _Key(
+                              key: Key('app-pin-key-${_keypadDigits[index]}'),
+                              x: _keypadPositions[index].dx,
+                              y: _keypadPositions[index].dy,
+                              label: '${_keypadDigits[index]}',
+                              onTap: () => _addDigit(_keypadDigits[index]),
+                            ),
+                          Positioned(
+                            left: 50,
+                            top: 284,
+                            width: 96,
+                            height: 54,
+                            child: TextButton(
+                              key: const Key('app-pin-rearrange'),
+                              onPressed: _shuffle,
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.zero,
+                              ),
+                              child: const Text(
+                                '재배열',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        Positioned(
-                          left: 457,
-                          top: 285,
-                          width: 67,
-                          height: 51,
-                          child: IconButton(
-                            key: const Key('app-pin-delete'),
-                            onPressed: _removeDigit,
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(
-                              Icons.backspace_outlined,
-                              color: Colors.white,
-                              size: 36,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 150,
-                          top: 357,
-                          width: 290,
-                          height: 50,
-                          child: TextButton(
-                            onPressed: _chooseLoginMethod,
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.white,
+                          Positioned(
+                            left: 457,
+                            top: 285,
+                            width: 67,
+                            height: 51,
+                            child: IconButton(
+                              key: const Key('app-pin-delete'),
+                              onPressed: _removeDigit,
                               padding: EdgeInsets.zero,
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '로그인 방법 다시 선택',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: -.3,
-                                    shadows: _bluePanelTextStroke,
-                                  ),
-                                ),
-                                SizedBox(width: 5),
-                                Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  size: 21,
-                                ),
-                              ],
+                              icon: const Icon(
+                                Icons.backspace_outlined,
+                                color: Colors.white,
+                                size: 36,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                          Positioned(
+                            left: 150,
+                            top: 357,
+                            width: 290,
+                            height: 50,
+                            child: TextButton(
+                              onPressed: _chooseLoginMethod,
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.zero,
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    '로그인 방법 다시 선택',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: -.3,
+                                      shadows: _bluePanelTextStroke,
+                                    ),
+                                  ),
+                                  SizedBox(width: 5),
+                                  Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    size: 21,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (_showPinLoading)
+                const Positioned.fill(
+                  child: PinLoadingOverlay(key: Key('app-pin-loading')),
+                ),
+            ],
+          ),
         );
       },
     );
