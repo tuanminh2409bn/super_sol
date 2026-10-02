@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Super SOL · Loading nút nhập số tiền</title>
+  <style>
+    @font-face { font-family: Noto; src: url('../../assets/fonts/NotoSansKR.ttf'); font-weight: 100 900; font-display: swap; }
+    :root { color-scheme: light; --blue: #0867f5; --ink: #111827; --arc: #d7d9de; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f5f8; color: var(--ink); font: 15px/1.55 system-ui, sans-serif; }
+    main { max-width: 880px; margin: auto; padding: 28px 24px; }
+    h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.7px; }
+    .intro { margin: 0 0 24px; color: #606978; }
+    .layout { display: grid; grid-template-columns: 340px 1fr; gap: 40px; align-items: start; }
+    .phone { width: 100%; aspect-ratio: 589 / 1280; position: relative; overflow: hidden; border-radius: 22px; background: white; box-shadow: 0 0 0 1px #dce1e9; }
+    .canvas { position: absolute; width: 589px; height: 1280px; transform-origin: top left; background: white; font-family: Noto, sans-serif; }
+    .statusbar { position: absolute; top: 30px; left: 44px; right: 44px; display: flex; align-items: center; justify-content: space-between; font: 600 25px/1.4 system-ui, sans-serif; color: black; }
+    .signal { display: flex; align-items: center; gap: 6px; font-size: 20px; }
+    .bars { display: flex; align-items: end; height: 20px; gap: 3px; }
+    .bars i { width: 4px; background: black; border-radius: 1px; }
+    .battery { width: 40px; height: 20px; border-radius: 6px; background: #aaa; color: white; font-size: 17px; line-height: 20px; text-align: center; box-shadow: inset 10px 0 black; }
+    .nav { position: absolute; top: 119px; width: 26px; height: 26px; stroke: #141820; stroke-width: 1.8; fill: none; }
+    .back { left: 37px; } .close { right: 33px; }
+    .account { position: absolute; top: 204px; left: 28px; right: 28px; }
+    .source { display: flex; align-items: center; gap: 23px; font-size: 23px; font-weight: 700; letter-spacing: -.65px; white-space: nowrap; }
+    .source-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .suffix { flex: none; display: flex; align-items: center; gap: 6px; }
+    .suffix svg { width: 25px; height: 25px; stroke: currentColor; stroke-width: 2; fill: none; }
+    .recipient { margin-top: 13px; font-size: 23px; font-weight: 700; letter-spacing: -.4px; }
+    .account-number { margin-top: 5px; font-size: 18px; font-weight: 500; color: #505866; }
+    .amount-area { position: absolute; top: 338px; left: 0; right: 0; text-align: center; }
+    .amount { font-size: 42px; font-weight: 700; line-height: 1.5; letter-spacing: -1px; }
+    .balance { margin-top: 13px; font-size: 19px; font-weight: 500; color: #505866; }
+    .balance u { text-underline-offset: 3px; }
+    button { cursor: pointer; font: inherit; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #ffad32; outline-offset: 4px; }
+    button:disabled { cursor: default; }
+    .shortcuts { position: absolute; top: 730px; left: 29px; right: 29px; display: flex; gap: 14px; }
+    .shortcuts button { flex: 1; height: 47px; border: 0; border-radius: 28px; background: #f1f3f8; color: #1c2028; font-size: 18px; font-weight: 700; }
+    .keypad { position: absolute; left: 47px; right: 47px; top: 845px; height: 300px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); }
+    .keypad button { border: 0; background: transparent; color: var(--ink); font-size: 35px; font-weight: 700; }
+    .keypad button:active { background: #f3f5f8; border-radius: 12px; }
+    .keypad svg { width: 40px; height: 34px; stroke: #4b4e56; stroke-width: 3; fill: none; vertical-align: middle; }
+    .next { position: absolute; left: 28px; right: 28px; bottom: 20px; height: 79px; border: 0; border-radius: 16px; background: var(--blue); color: white; }
+    .next:disabled:not(.loading) { background: #f0f3f8; color: #98a1b1; }
+    .next-content { display: flex; justify-content: center; align-items: center; height: 100%; }
+    .next-label { font-size: 23px; font-weight: 700; }
+    .spinner-slot { width: 0; overflow: hidden; opacity: 0; transition: width 130ms ease-out, opacity 90ms linear; }
+    .loading .spinner-slot { width: 38px; opacity: 1; }
+    .spinner { display: block; margin-left: 12px; width: 26px; height: 26px; animation: turn 500ms linear infinite; animation-play-state: paused; }
+    .loading .spinner { animation-play-state: running; }
+    .arc { fill: none; stroke: var(--arc); stroke-width: 3.2; stroke-linecap: round; stroke-dasharray: 12 88; }
+    @keyframes turn { to { transform: rotate(360deg); } }
+    .controls { padding-top: 8px; }
+    h2 { margin: 0 0 12px; font-size: 19px; }
+    .controls p { color: #606978; margin: 0 0 20px; }
+    .control-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 18px; }
+    .control-row input[type=range] { width: 140px; accent-color: var(--blue); }
+    .control-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--blue); }
+    .secondary { border: 1px solid #d5dbe5; border-radius: 8px; padding: 9px 14px; background: white; color: #1c2028; }
+    .state { min-height: 50px; margin-top: 20px; padding: 12px 14px; border-left: 3px solid var(--blue); background: #eaf0fc; color: #165ad0; }
+    .details { margin-top: 24px; font-size: 13px; color: #606978; }
+    @media (max-width: 660px) { main { padding: 20px 16px; } h1 { font-size: 23px; } .layout { grid-template-columns: minmax(0, 340px); justify-content: center; gap: 22px; } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2200ms; } .spinner-slot { transition: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Loading trong nút nhập số tiền</h1>
+  <p class="intro">Bấm “다음” để xem chữ dịch nhẹ sang trái và cung xám nhạt xuất hiện bên phải. Chỉ là demo, không thực hiện chuyển khoản.</p>
+  <div class="layout">
+    <section class="phone" aria-label="Demo màn hình nhập số tiền">
+      <div class="canvas" lang="ko">
+        <div class="statusbar" aria-hidden="true"><span>13:56 ♩</span><span class="signal"><span class="bars"><i style="height:8px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:20px"></i></span> LTE <span class="battery">26</span></span></div>
+        <svg class="nav back" aria-hidden="true" viewBox="0 0 26 26"><path d="M16 4 7 13l9 9"/></svg>
+        <svg class="nav close" aria-hidden="true" viewBox="0 0 26 26"><path d="m3 3 20 20M23 3 3 23"/></svg>
+        <div class="account">
+          <div class="source"><span class="source-name">[금융거래한도계좌2]신한 주거래 우...</span><span class="suffix">계좌에서<svg viewBox="0 0 26 26" aria-hidden="true"><path d="m7 10 6 6 6-6"/></svg></span></div>
+          <div class="recipient">HOANG VAN THAO님 계좌로</div>
+          <div class="account-number">신한 110-613-182416</div>
+        </div>
+        <div class="amount-area"><div class="amount" id="amount">8원</div><div class="balance">출금가능금액 <u>6,004,005원</u></div></div>
+        <div class="shortcuts" aria-label="금액 추가">
+          <button type="button" data-add="10000">+1만</button><button type="button" data-add="50000">+5만</button><button type="button" data-add="100000">+10만</button><button type="button" data-all>전액</button>
+        </div>
+        <div class="keypad" aria-label="금액 키패드">
+          <button type="button" data-digit="1">1</button><button type="button" data-digit="2">2</button><button type="button" data-digit="3">3</button>
+          <button type="button" data-digit="4">4</button><button type="button" data-digit="5">5</button><button type="button" data-digit="6">6</button>
+          <button type="button" data-digit="7">7</button><button type="button" data-digit="8">8</button><button type="button" data-digit="9">9</button>
+          <button type="button" data-digit="00">00</button><button type="button" data-digit="0">0</button><button type="button" data-delete aria-label="마지막 숫자 삭제"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M13 5h22v24H13L3 17Z"/><path d="m17 11 12 12m0-12L17 23"/></svg></button>
+        </div>
+        <button type="button" class="next" id="next" aria-busy="false"><span class="next-content"><span class="next-label">다음</span><span class="spinner-slot" aria-hidden="true"><svg class="spinner" viewBox="0 0 26 26"><circle class="arc" cx="13" cy="13" r="10" pathLength="100" transform="rotate(-90 13 13)"/></svg></span></span></button>
+      </div>
+    </section>
+    <section class="controls" aria-labelledby="controls-title">
+      <h2 id="controls-title">Xem chuyển động</h2>
+      <p>Loading nằm trong nút, không có vòng nền và không có lớp phủ tối trên màn hình.</p>
+      <div class="control-row"><label for="duration">Thời gian loading</label><input id="duration" type="range" min="400" max="2000" step="100" value="700"><output id="duration-value" for="duration">0,7 s</output></div>
+      <label class="control-row"><input id="hold" type="checkbox">Giữ loading để xem kỹ</label>
+      <button class="secondary" id="reset" type="button">Đặt lại demo</button>
+      <div class="state" id="state" role="status" aria-live="polite">Sẵn sàng — bấm nút “다음” trên màn hình.</div>
+      <div class="details">Cung ngắn 12% · 500 ms/vòng · xám nhạt #D7D9DE.<br>Chữ dịch trái 19 px trên canvas gốc 589 px.<br>Demo độc lập; chưa tích hợp vào App.</div>
+    </section>
+  </div>
+</main>
+<script>
+  const phone = document.querySelector('.phone');
+  const canvas = document.querySelector('.canvas');
+  const next = document.querySelector('#next');
+  const amountLabel = document.querySelector('#amount');
+  const status = document.querySelector('#state');
+  const duration = document.querySelector('#duration');
+  const hold = document.querySelector('#hold');
+  const amountKeys = document.querySelectorAll('.keypad button, .shortcuts button');
+  let amount = '8';
+  let busy = false;
+  let timer;
+  const fit = () => { canvas.style.transform = `scale(${phone.clientWidth / 589})`; };
+  new ResizeObserver(fit).observe(phone);
+  fit();
+  function renderAmount() {
+    amountLabel.textContent = Number(amount) ? `${Number(amount).toLocaleString('ko-KR')}원` : '얼마를 보낼까요?';
+    next.disabled = busy || !Number(amount);
+  }
+  function finish() {
+    clearTimeout(timer);
+    busy = false;
+    next.classList.remove('loading');
+    next.setAttribute('aria-busy', 'false');
+    amountKeys.forEach(key => { key.disabled = false; });
+    renderAmount();
+    status.textContent = 'Đã hoàn tất loading. Bấm “다음” để chạy lại.';
+  }
+  next.addEventListener('click', () => {
+    if (busy || !Number(amount)) return;
+    busy = true;
+    next.classList.add('loading');
+    next.setAttribute('aria-busy', 'true');
+    next.disabled = true;
+    amountKeys.forEach(key => { key.disabled = true; });
+    status.textContent = 'Đang loading — chữ dịch trái, cung xám quay ở bên phải.';
+    if (!hold.checked) timer = setTimeout(finish, Number(duration.value));
+  });
+  hold.addEventListener('change', () => {
+    if (!busy) return;
+    clearTimeout(timer);
+    if (!hold.checked) timer = setTimeout(finish, Number(duration.value));
+  });
+  duration.addEventListener('input', () => {
+    document.querySelector('#duration-value').textContent = `${(Number(duration.value) / 1000).toLocaleString('vi-VN')} s`;
+  });
+  amountKeys.forEach(key => key.addEventListener('click', () => {
+    if (busy) return;
+    if (key.hasAttribute('data-delete')) amount = amount.slice(0, -1) || '0';
+    else if (key.hasAttribute('data-all')) amount = '6004005';
+    else if (key.hasAttribute('data-add')) amount = String(Math.min(6004005, Number(amount) + Number(key.dataset.add)));
+    else amount = String(Math.min(6004005, Number(amount + key.dataset.digit)));
+    renderAmount();
+  }));
+  document.querySelector('#reset').addEventListener('click', () => {
+    finish();
+    amount = '8';
+    renderAmount();
+    status.textContent = 'Sẵn sàng — bấm nút “다음” trên màn hình.';
+  });
+</script>
+</body>
+</html>

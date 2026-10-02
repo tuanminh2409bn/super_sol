@@ -57,7 +57,7 @@ void main() {
         await tester.tap(find.byKey(const Key('amount-key-1')));
         await tester.pump();
         await tester.tap(find.byKey(const Key('transfer-next')));
-        await tester.pump();
+        await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('transfer-next')));
         await tester.pumpAndSettle();
       }

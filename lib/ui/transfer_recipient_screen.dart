@@ -7,6 +7,7 @@ import '../core/app_data.dart';
 import '../core/auth_service.dart';
 import '../core/bank_catalog.dart';
 import '../core/pin_security.dart';
+import 'amount_button_loading.dart';
 import 'auth_sheet.dart';
 import 'bank_logo.dart';
 import 'data_management_screen.dart';
@@ -88,6 +89,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
   int _pinFailedAttempts = 0;
   bool _pinBusy = false;
   bool _showPinLoading = false;
+  bool _amountLoading = false;
 
   @override
   void initState() {
@@ -132,7 +134,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
       _account.isNotEmpty && _bank != null && _selectedSourceAccount != null;
 
   void _back() {
-    if (_showPinLoading) return;
+    if (_showPinLoading || _amountLoading) return;
     if (_stage == _TransferStage.pin) {
       setState(() => _stage = _TransferStage.confirmation);
     } else if (_stage == _TransferStage.confirmation) {
@@ -553,6 +555,22 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
     await showTransferFailurePopup(context);
   }
 
+  Future<void> _continueAmount() async {
+    if (_amountLoading || _amount <= 0 || _selectedSourceAccount == null) {
+      return;
+    }
+    setState(() => _amountLoading = true);
+    await Future<void>.delayed(AmountButtonContent.displayDuration);
+    if (!mounted) return;
+    setState(() {
+      _amountLoading = false;
+      if (_stage == _TransferStage.amount && _selectedSourceAccount != null) {
+        _reviewDetailsExpanded = true;
+        _stage = _TransferStage.confirmation;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final sourceAccount = _selectedSourceAccount;
@@ -568,7 +586,7 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
         ? 78.0
         : 79.0;
     final content = PopScope(
-      canPop: !_showPinLoading,
+      canPop: !_showPinLoading && !_amountLoading,
       onPopInvokedWithResult: (_, __) => showDeviceStatusBar(
         darkIcons: true,
         backgroundColor: const Color(0xFFF0F3FA),
@@ -686,11 +704,8 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                       child: FilledButton(
                         key: const Key('transfer-next'),
                         onPressed: _stage == _TransferStage.amount
-                            ? (_amount > 0
-                                  ? () => setState(() {
-                                      _reviewDetailsExpanded = true;
-                                      _stage = _TransferStage.confirmation;
-                                    })
+                            ? (_amount > 0 && !_amountLoading
+                                  ? _continueAmount
                                   : null)
                             : (_stage == _TransferStage.confirmation
                                   ? _startPinEntry
@@ -699,24 +714,46 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
                                   : null),
                         style: FilledButton.styleFrom(
                           backgroundColor: _blue,
-                          disabledBackgroundColor: const Color(0xFFF0F3F8),
-                          disabledForegroundColor: const Color(0xFF98A1B1),
+                          disabledBackgroundColor: _amountLoading
+                              ? _blue
+                              : const Color(0xFFF0F3F8),
+                          disabledForegroundColor: _amountLoading
+                              ? Colors.white
+                              : const Color(0xFF98A1B1),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: Text(
-                          _stage == _TransferStage.confirmation ? '보내기' : '다음',
-                          style: TextStyle(
-                            fontSize: _manualEntry ? 22 : 23,
-                            fontWeight: _manualEntry
-                                ? FontWeight.w500
-                                : FontWeight.w700,
-                            fontVariations: [
-                              FontVariation('wght', _manualEntry ? 500 : 700),
-                            ],
-                          ),
-                        ),
+                        child: _stage == _TransferStage.amount
+                            ? AmountButtonContent(
+                                loading: _amountLoading,
+                                labelStyle: _manualEntry
+                                    ? const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w500,
+                                        fontVariations: [
+                                          FontVariation('wght', 500),
+                                        ],
+                                      )
+                                    : null,
+                              )
+                            : Text(
+                                _stage == _TransferStage.confirmation
+                                    ? '보내기'
+                                    : '다음',
+                                style: TextStyle(
+                                  fontSize: _manualEntry ? 22 : 23,
+                                  fontWeight: _manualEntry
+                                      ? FontWeight.w500
+                                      : FontWeight.w700,
+                                  fontVariations: [
+                                    FontVariation(
+                                      'wght',
+                                      _manualEntry ? 500 : 700,
+                                    ),
+                                  ],
+                                ),
+                              ),
                       ),
                     ),
                   if (_sourceAccountSelectorVisible)
@@ -734,6 +771,12 @@ class _TransferRecipientScreenState extends State<TransferRecipientScreen> {
               ),
             ),
           ),
+          if (_amountLoading)
+            const Positioned.fill(
+              child: AbsorbPointer(
+                child: ColoredBox(color: Colors.transparent),
+              ),
+            ),
           if (_showPinLoading)
             const Positioned.fill(
               child: PinLoadingOverlay(key: Key('transfer-pin-loading')),
